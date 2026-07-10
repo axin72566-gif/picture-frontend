@@ -12,6 +12,7 @@ import {
   PersonCircleOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/authStore'
+import UserAvatar from './UserAvatar.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -75,6 +76,11 @@ async function handleMenuSelect(key: string | number) {
   }
 
   if (key === 'profile') {
+    try {
+      await auth.fetchCurrentUser()
+    } catch {
+      // The global interceptor handles expired sessions; navigation can still continue.
+    }
     await router.push('/profile')
     return
   }
@@ -140,9 +146,7 @@ async function handleMenuSelect(key: string | number) {
         @select="handleMenuSelect"
       >
         <button class="user-trigger" type="button">
-          <n-avatar round :size="34" :src="auth.avatarUrl || undefined" color="#2563eb">
-            {{ avatarText }}
-          </n-avatar>
+          <UserAvatar :key="auth.avatarKey" :size="34" :src="auth.avatarDisplayUrl" :text="avatarText" />
           <span class="user-name">{{ auth.displayName }}</span>
         </button>
       </n-dropdown>

@@ -3,7 +3,7 @@ import type { AxiosError, AxiosResponse } from 'axios'
 import type { BaseResponse } from '../types/user'
 
 const request = axios.create({
-  baseURL: '/',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/',
   timeout: 15000,
   withCredentials: true,
 })

@@ -1,9 +1,11 @@
+import type { AxiosProgressEvent } from 'axios'
 import request from './request'
 import type {
   BaseResponse,
   LoginResult,
   UserLoginRequest,
   UserRegisterRequest,
+  UserUpdateRequest,
   UserVO,
 } from '../types/user'
 
@@ -21,4 +23,17 @@ export function userLogout() {
 
 export function getCurrentUser() {
   return request.get<BaseResponse<UserVO>>('/api/user/current')
+}
+
+export function updateCurrentUser(data: UserUpdateRequest) {
+  return request.put<BaseResponse<UserVO>>('/api/user/update', data)
+}
+
+export function uploadUserAvatar(file: File, onUploadProgress?: (event: AxiosProgressEvent) => void) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request.post<BaseResponse<string>>('/api/user/avatar/upload', formData, {
+    onUploadProgress,
+  })
 }

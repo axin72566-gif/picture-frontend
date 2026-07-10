@@ -15,6 +15,11 @@ export interface UserLoginRequest {
   userPassword: string
 }
 
+export interface UserUpdateRequest {
+  userName?: string
+  userProfile?: string
+}
+
 export interface UserVO {
   id: number
   userAccount: string
