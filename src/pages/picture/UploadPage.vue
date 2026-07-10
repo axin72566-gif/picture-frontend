@@ -9,6 +9,7 @@ import {
 } from '@vicons/ionicons5'
 import { updatePicture, uploadPicture } from '../../api/picture'
 import type { PictureUploadResult } from '../../types/picture'
+import UserAvatar from '../../components/UserAvatar.vue'
 
 const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const maxFileSize = 10 * 1024 * 1024
@@ -29,12 +30,12 @@ const fileSizeText = computed(() => {
   return formatFileSize(selectedFile.value.size)
 })
 
-const resultSizeText = computed(() => {
-  if (!uploadResult.value) return ''
-  return formatFileSize(uploadResult.value.size)
-})
-
 const resultCreatedAt = computed(() => formatDate(uploadResult.value?.createTime))
+const resultCreatorName = computed(
+  () => uploadResult.value?.user?.userName || uploadResult.value?.user?.userAccount || '未知用户',
+)
+const resultCreatorAvatar = computed(() => uploadResult.value?.user?.userAvatar || '')
+const resultCreatorAvatarText = computed(() => resultCreatorName.value.slice(0, 1).toUpperCase())
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`
@@ -274,24 +275,20 @@ onBeforeUnmount(() => {
             </n-button>
           </n-form>
 
+          <div class="creator-summary">
+            <UserAvatar :size="34" :src="resultCreatorAvatar" :text="resultCreatorAvatarText" />
+            <div>
+              <span>创建者</span>
+              <strong>{{ resultCreatorName }}</strong>
+            </div>
+          </div>
+
           <n-descriptions :column="1" bordered label-placement="left" size="small">
             <n-descriptions-item label="图片 ID">
               {{ uploadResult.id }}
             </n-descriptions-item>
             <n-descriptions-item label="文件名">
               {{ uploadResult.name }}
-            </n-descriptions-item>
-            <n-descriptions-item label="尺寸">
-              {{ uploadResult.width }} x {{ uploadResult.height }}
-            </n-descriptions-item>
-            <n-descriptions-item label="大小">
-              {{ resultSizeText }}
-            </n-descriptions-item>
-            <n-descriptions-item label="格式">
-              {{ uploadResult.format }}
-            </n-descriptions-item>
-            <n-descriptions-item label="MIME">
-              {{ uploadResult.contentType }}
             </n-descriptions-item>
             <n-descriptions-item label="上传时间">
               {{ resultCreatedAt }}
@@ -483,6 +480,36 @@ h1 {
 .info-form {
   display: grid;
   gap: 8px;
+}
+
+.creator-summary {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.creator-summary div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.creator-summary span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.creator-summary strong {
+  overflow: hidden;
+  color: #111827;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .empty-result {

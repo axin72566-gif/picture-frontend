@@ -1,3 +1,5 @@
+import type { UserVO } from './user'
+
 export interface PictureVO {
   id: number
   url: string
@@ -8,6 +10,7 @@ export interface PictureVO {
   contentType: string
   format: string
   userId: number
+  user: UserVO | null
   createTime: string
 }
 

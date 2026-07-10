@@ -14,6 +14,7 @@ import {
 import { deletePicture, getMyPicturePage, getPublicPicturePage, updatePicture } from '../api/picture'
 import { useAuthStore } from '../stores/authStore'
 import type { PageResult, PictureSortField, PictureVO, SortOrder } from '../types/picture'
+import UserAvatar from './UserAvatar.vue'
 
 const props = defineProps<{
   mode: 'public' | 'mine'
@@ -175,10 +176,12 @@ function downloadImage(picture: PictureVO) {
   link.click()
 }
 
-function formatFileSize(size: number) {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / 1024 / 1024).toFixed(2)} MB`
+function getCreatorName(picture: PictureVO) {
+  return picture.user?.userName || picture.user?.userAccount || '未知用户'
+}
+
+function getCreatorAvatarText(picture: PictureVO) {
+  return getCreatorName(picture).slice(0, 1).toUpperCase()
 }
 
 function formatDate(value: string) {
@@ -266,12 +269,19 @@ onMounted(() => {
               </div>
               <template v-else>
                 <h2 :title="picture.name">{{ picture.name }}</h2>
-                <p>{{ picture.width }} x {{ picture.height }} · {{ formatFileSize(picture.size) }}</p>
               </template>
 
               <div class="meta-row">
-                <span>{{ picture.format || picture.contentType }}</span>
                 <span>{{ formatDate(picture.createTime) }}</span>
+              </div>
+
+              <div class="creator-row">
+                <UserAvatar
+                  :size="26"
+                  :src="picture.user?.userAvatar || ''"
+                  :text="getCreatorAvatarText(picture)"
+                />
+                <span :title="getCreatorName(picture)">{{ getCreatorName(picture) }}</span>
               </div>
 
               <div class="card-actions">
@@ -470,6 +480,22 @@ h1 {
 }
 
 .meta-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.creator-row span:last-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
