@@ -30,11 +30,6 @@ const menuOptions = computed(() => [
     icon: renderIcon(CloudUploadOutline),
   },
   {
-    label: '我的图库',
-    key: 'my-pictures',
-    icon: renderIcon(ImagesOutline),
-  },
-  {
     label: '个人资料',
     key: 'profile',
     icon: renderIcon(PersonCircleOutline),
@@ -67,11 +62,6 @@ async function goProtected(path: string) {
 async function handleMenuSelect(key: string | number) {
   if (key === 'upload') {
     await router.push('/upload')
-    return
-  }
-
-  if (key === 'my-pictures') {
-    await router.push('/my-pictures')
     return
   }
 
@@ -114,17 +104,6 @@ async function handleMenuSelect(key: string | number) {
             <n-icon :component="ImagesOutline" />
           </template>
           公共图库
-        </n-button>
-        <n-button
-          quaternary
-          class="nav-button"
-          :class="{ 'nav-button--active': isActive(['/my-pictures']) }"
-          @click="goProtected('/my-pictures')"
-        >
-          <template #icon>
-            <n-icon :component="PersonCircleOutline" />
-          </template>
-          我的图库
         </n-button>
         <n-button
           quaternary

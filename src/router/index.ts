@@ -32,8 +32,7 @@ const router = createRouter({
     {
       path: '/my-pictures',
       name: 'my-pictures',
-      component: () => import('../pages/picture/MyPicturesPage.vue'),
-      meta: { requiresAuth: true },
+      redirect: '/profile',
     },
     {
       path: '/upload',

@@ -11,6 +11,7 @@ import {
   RefreshOutline,
   SaveOutline,
 } from '@vicons/ionicons5'
+import PictureLibrary from '../../components/PictureLibrary.vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
 import type { UserUpdateRequest } from '../../types/user'
@@ -401,6 +402,15 @@ onBeforeUnmount(() => {
         </section>
       </aside>
     </section>
+
+    <section class="page-width profile-pictures">
+      <PictureLibrary
+        mode="mine"
+        title="个人图库"
+        subtitle=""
+        embedded
+      />
+    </section>
   </div>
 </template>
 
@@ -414,6 +424,10 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 24px;
+}
+
+.profile-pictures {
+  margin-top: 24px;
 }
 
 .profile-main,

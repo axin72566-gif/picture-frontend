@@ -4,9 +4,7 @@ import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import {
   CreateOutline,
-  DownloadOutline,
   ImageOutline,
-  OpenOutline,
   RefreshOutline,
   SearchOutline,
   TrashOutline,
@@ -16,11 +14,17 @@ import { useAuthStore } from '../stores/authStore'
 import type { PageResult, PictureSortField, PictureVO, SortOrder } from '../types/picture'
 import UserAvatar from './UserAvatar.vue'
 
-const props = defineProps<{
-  mode: 'public' | 'mine'
-  title: string
-  subtitle: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    mode: 'public' | 'mine'
+    title: string
+    subtitle: string
+    embedded?: boolean
+  }>(),
+  {
+    embedded: false,
+  },
+)
 
 const message = useMessage()
 const router = useRouter()
@@ -52,6 +56,8 @@ const pageData = ref<PageResult<PictureVO>>({
 
 const isMine = computed(() => props.mode === 'mine')
 const records = computed(() => pageData.value.records)
+const rootClass = computed(() => ({ 'library-page--embedded': props.embedded }))
+const sectionClass = computed(() => (props.embedded ? 'library-section' : 'page-width'))
 
 const sortFieldOptions = [
   { label: '上传时间', value: 'createTime' },
@@ -167,15 +173,6 @@ function openImage(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-function downloadImage(picture: PictureVO) {
-  const link = document.createElement('a')
-  link.href = picture.url
-  link.download = picture.name
-  link.target = '_blank'
-  link.rel = 'noopener noreferrer'
-  link.click()
-}
-
 function getCreatorName(picture: PictureVO) {
   return picture.user?.userName || picture.user?.userAccount || '未知用户'
 }
@@ -211,8 +208,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="library-page">
-    <section class="page-width library-hero">
+  <div class="library-page" :class="rootClass">
+    <section :class="[sectionClass, 'library-hero']">
       <div>
         <h1>{{ title }}</h1>
         <p v-if="subtitle" class="hero-subtitle">{{ subtitle }}</p>
@@ -227,7 +224,7 @@ onMounted(() => {
       </div>
     </section>
 
-    <section class="page-width filter-bar">
+    <section :class="[sectionClass, 'filter-bar']">
       <n-input
         v-model:value="query.name"
         clearable
@@ -246,7 +243,7 @@ onMounted(() => {
       <n-button quaternary @click="resetFilters">重置</n-button>
     </section>
 
-    <section class="page-width">
+    <section :class="sectionClass">
       <n-spin :show="loading">
         <div v-if="records.length" class="picture-grid">
           <article v-for="picture in records" :key="picture.id" class="picture-card">
@@ -284,53 +281,31 @@ onMounted(() => {
                 <span :title="getCreatorName(picture)">{{ getCreatorName(picture) }}</span>
               </div>
 
-              <div class="card-actions">
+              <div v-if="isMine" class="card-actions">
                 <n-tooltip trigger="hover">
                   <template #trigger>
-                    <n-button circle quaternary @click="openImage(picture.url)">
+                    <n-button circle quaternary @click="startEdit(picture)">
                       <template #icon>
-                        <n-icon :component="OpenOutline" />
+                        <n-icon :component="CreateOutline" />
                       </template>
                     </n-button>
                   </template>
-                  打开原图
+                  编辑名称
                 </n-tooltip>
-                <n-tooltip trigger="hover">
+                <n-popconfirm
+                  positive-text="删除"
+                  negative-text="取消"
+                  @positive-click="handleDelete(picture)"
+                >
                   <template #trigger>
-                    <n-button circle quaternary @click="downloadImage(picture)">
+                    <n-button circle quaternary type="error" :loading="deletingId === picture.id">
                       <template #icon>
-                        <n-icon :component="DownloadOutline" />
+                        <n-icon :component="TrashOutline" />
                       </template>
                     </n-button>
                   </template>
-                  下载图片
-                </n-tooltip>
-                <template v-if="isMine">
-                  <n-tooltip trigger="hover">
-                    <template #trigger>
-                      <n-button circle quaternary @click="startEdit(picture)">
-                        <template #icon>
-                          <n-icon :component="CreateOutline" />
-                        </template>
-                      </n-button>
-                    </template>
-                    编辑名称
-                  </n-tooltip>
-                  <n-popconfirm
-                    positive-text="删除"
-                    negative-text="取消"
-                    @positive-click="handleDelete(picture)"
-                  >
-                    <template #trigger>
-                      <n-button circle quaternary type="error" :loading="deletingId === picture.id">
-                        <template #icon>
-                          <n-icon :component="TrashOutline" />
-                        </template>
-                      </n-button>
-                    </template>
-                    删除后会同步删除源文件，确定继续吗？
-                  </n-popconfirm>
-                </template>
+                  删除后会同步删除源文件，确定继续吗？
+                </n-popconfirm>
               </div>
             </div>
           </article>
@@ -345,7 +320,7 @@ onMounted(() => {
       </n-spin>
     </section>
 
-    <section v-if="pageData.pages > 1" class="page-width pagination-row">
+    <section v-if="pageData.pages > 1" :class="[sectionClass, 'pagination-row']">
       <n-pagination
         :page="query.current"
         :page-size="query.pageSize"
@@ -372,12 +347,25 @@ onMounted(() => {
   padding: 32px 0 48px;
 }
 
+.library-page--embedded {
+  padding: 0;
+}
+
+.library-section {
+  width: 100%;
+}
+
 .library-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
   padding: 28px 0 20px;
+}
+
+.library-page--embedded .library-hero {
+  align-items: center;
+  padding: 0 0 18px;
 }
 
 h1,
@@ -390,6 +378,10 @@ h1 {
   color: #111827;
   font-size: clamp(28px, 4vw, 42px);
   line-height: 1.18;
+}
+
+.library-page--embedded h1 {
+  font-size: 22px;
 }
 
 .hero-subtitle {
