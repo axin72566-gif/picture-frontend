@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { ArrowBackOutline, PeopleOutline, PersonCircleOutline } from '@vicons/ionicons5'
-import { getUserById, getUserFollowers, getUserFollowing } from '../../api/user'
+import { getUserById, getUserFollowers, getUserFollowing, unfollowUser } from '../../api/user'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
 import type { PageResponse, UserVO } from '../../types/user'
@@ -18,6 +18,8 @@ const auth = useAuthStore()
 const loading = ref(false)
 const targetUser = ref<UserVO | null>(null)
 const loadError = ref('')
+const unfollowingId = ref<number | null>(null)
+const hoveredUnfollowId = ref<number | null>(null)
 const query = reactive({
   current: 1,
   pageSize: 10,
@@ -38,6 +40,9 @@ const userId = computed(() => {
   return Number.isFinite(id) && id > 0 ? id : null
 })
 const listType = computed<FollowListType>(() => (route.name === 'user-following' ? 'following' : 'followers'))
+const isOwnFollowingList = computed(
+  () => auth.user?.id === userId.value && listType.value === 'following',
+)
 const targetName = computed(() => targetUser.value?.userName || targetUser.value?.userAccount || '用户')
 const pageTitle = computed(() => (listType.value === 'followers' ? `${targetName.value} 的粉丝` : `${targetName.value} 的关注`))
 const emptyText = computed(() => (listType.value === 'followers' ? '暂无粉丝' : '暂无关注'))
@@ -54,6 +59,10 @@ function getAvatarText(user: UserVO) {
   return getDisplayName(user).slice(0, 1).toUpperCase()
 }
 
+function getUnfollowButtonLabel(id: number) {
+  return hoveredUnfollowId.value === id ? '取消关注' : '已关注'
+}
+
 function goToUser(user: UserVO) {
   if (auth.user?.id === user.id) {
     void router.push('/profile')
@@ -66,6 +75,55 @@ function switchList(type: FollowListType) {
   if (userId.value === null || type === listType.value) return
   query.current = 1
   void router.push(`/user/${userId.value}/${type}`)
+}
+
+function syncFollowingCount(delta: number) {
+  if (targetUser.value) {
+    targetUser.value = {
+      ...targetUser.value,
+      followingCount: Math.max(0, (targetUser.value.followingCount ?? 0) + delta),
+    }
+  }
+
+  if (auth.user) {
+    auth.user.followingCount = Math.max(0, (auth.user.followingCount ?? 0) + delta)
+    sessionStorage.setItem('user', JSON.stringify(auth.user))
+  }
+}
+
+async function removeFollowingItem(followedId: number) {
+  pageData.value.records = pageData.value.records.filter((item) => item.id !== followedId)
+  pageData.value.total = Math.max(0, pageData.value.total - 1)
+  pageData.value.pages = Math.ceil(pageData.value.total / query.pageSize) || 0
+  syncFollowingCount(-1)
+
+  if (pageData.value.records.length === 0 && query.current > 1) {
+    query.current -= 1
+    await fetchFollowPage()
+  }
+}
+
+async function handleUnfollow(item: UserVO) {
+  if (!isOwnFollowingList.value || unfollowingId.value !== null) return
+
+  unfollowingId.value = item.id
+  try {
+    await unfollowUser(item.id)
+    await removeFollowingItem(item.id)
+    message.success('已取消关注')
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '操作失败'
+    if (errorMessage.includes('未关注该用户')) {
+      await removeFollowingItem(item.id)
+      return
+    }
+    message.error(errorMessage)
+  } finally {
+    unfollowingId.value = null
+    if (hoveredUnfollowId.value === item.id) {
+      hoveredUnfollowId.value = null
+    }
+  }
 }
 
 async function fetchFollowPage() {
@@ -148,7 +206,12 @@ watch(
 
       <n-spin :show="loading">
         <div v-if="pageData.records.length" class="user-list">
-          <article v-for="item in pageData.records" :key="item.id" class="user-card">
+          <article
+            v-for="item in pageData.records"
+            :key="item.id"
+            class="user-card"
+            :class="{ 'user-card--with-action': isOwnFollowingList }"
+          >
             <button class="user-main" type="button" @click="goToUser(item)">
               <UserAvatar :size="46" :src="item.userAvatar || ''" :text="getAvatarText(item)" />
               <span>
@@ -156,9 +219,23 @@ watch(
                 <small>@{{ item.userAccount }}</small>
               </span>
             </button>
-            <div class="user-stats">
-              <span>{{ item.followerCount ?? 0 }} 粉丝</span>
-              <span>{{ item.followingCount ?? 0 }} 关注</span>
+            <div class="user-meta">
+              <div class="user-stats">
+                <span>{{ item.followerCount ?? 0 }} 粉丝</span>
+                <span>{{ item.followingCount ?? 0 }} 关注</span>
+              </div>
+              <n-button
+                v-if="isOwnFollowingList"
+                size="small"
+                title="点击取消关注"
+                :loading="unfollowingId === item.id"
+                :disabled="unfollowingId !== null && unfollowingId !== item.id"
+                @mouseenter="hoveredUnfollowId = item.id"
+                @mouseleave="hoveredUnfollowId = null"
+                @click.stop="handleUnfollow(item)"
+              >
+                {{ getUnfollowButtonLabel(item.id) }}
+              </n-button>
             </div>
           </article>
         </div>
@@ -297,6 +374,12 @@ h2 {
   font-size: 13px;
 }
 
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .user-stats {
   display: flex;
   gap: 12px;
@@ -355,8 +438,17 @@ h2 {
     width: 100%;
   }
 
+  .user-meta {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
   .user-stats {
     justify-content: flex-start;
+  }
+
+  .user-card--with-action .user-meta .n-button {
+    margin-left: auto;
   }
 }
 </style>
