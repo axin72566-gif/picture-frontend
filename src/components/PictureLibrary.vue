@@ -16,6 +16,7 @@ import { deletePicture, getMyPicturePage, getPublicPicturePage, updatePicture } 
 import { followUser, getUserFollowStatus, unfollowUser } from '../api/user'
 import { useAuthStore } from '../stores/authStore'
 import type { PageResult, PictureSortField, PictureVO, SortOrder } from '../types/picture'
+import PictureCommentSection from './PictureCommentSection.vue'
 import UserAvatar from './UserAvatar.vue'
 
 const props = withDefaults(
@@ -602,6 +603,11 @@ onMounted(() => {
             </template>
             打开原图
           </n-button>
+
+          <PictureCommentSection
+            :picture-id="detailPicture.id"
+            :picture-owner-id="detailPicture.userId || detailPicture.user?.id || 0"
+          />
         </div>
       </div>
     </n-modal>

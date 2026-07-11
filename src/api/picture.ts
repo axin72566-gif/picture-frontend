@@ -3,6 +3,9 @@ import request from './request'
 import type { BaseResponse } from '../types/user'
 import type {
   PageResult,
+  PictureCommentAddRequest,
+  PictureCommentPageRequest,
+  PictureCommentVO,
   PicturePageRequest,
   PictureUpdateRequest,
   PictureUploadResult,
@@ -42,4 +45,24 @@ export function updatePicture(data: PictureUpdateRequest) {
 
 export function deletePicture(id: number) {
   return request.delete<BaseResponse<null>>(`/api/picture/delete/${id}`)
+}
+
+export function addPictureComment(pictureId: number, data: PictureCommentAddRequest) {
+  return request.post<BaseResponse<PictureCommentVO>>(`/api/picture/${pictureId}/comment`, data)
+}
+
+export function getPictureRootComments(pictureId: number, params: PictureCommentPageRequest = {}) {
+  return request.get<BaseResponse<PageResult<PictureCommentVO>>>(`/api/picture/${pictureId}/comments`, {
+    params,
+  })
+}
+
+export function getPictureCommentReplies(rootId: number, params: PictureCommentPageRequest = {}) {
+  return request.get<BaseResponse<PageResult<PictureCommentVO>>>(`/api/picture/comment/${rootId}/replies`, {
+    params,
+  })
+}
+
+export function deletePictureComment(commentId: number) {
+  return request.delete<BaseResponse<null>>(`/api/picture/comment/${commentId}`)
 }

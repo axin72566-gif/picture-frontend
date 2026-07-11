@@ -44,3 +44,25 @@ export interface PictureUpdateRequest {
   name?: string
   description?: string
 }
+
+export interface PictureCommentVO {
+  id: number
+  pictureId: number
+  userId: number
+  content: string
+  parentId: number | null
+  rootId: number | null
+  replyCount: number | null
+  user: UserVO | null
+  createTime: string
+}
+
+export interface PictureCommentAddRequest {
+  content: string
+  parentId?: number | null
+}
+
+export interface PictureCommentPageRequest {
+  current?: number
+  pageSize?: number
+}
