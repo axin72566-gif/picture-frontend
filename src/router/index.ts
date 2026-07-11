@@ -30,6 +30,16 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/user/:id/followers',
+      name: 'user-followers',
+      component: () => import('../pages/user/UserFollowPage.vue'),
+    },
+    {
+      path: '/user/:id/following',
+      name: 'user-following',
+      component: () => import('../pages/user/UserFollowPage.vue'),
+    },
+    {
       path: '/user/:id',
       name: 'creator-profile',
       component: () => import('../pages/user/CreatorProfilePage.vue'),

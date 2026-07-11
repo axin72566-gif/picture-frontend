@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { ArrowBackOutline, PersonCircleOutline } from '@vicons/ionicons5'
-import { getUserById } from '../../api/user'
+import { ArrowBackOutline, PeopleOutline, PersonAddOutline, PersonCircleOutline } from '@vicons/ionicons5'
+import { followUser, getUserById, getUserFollowStatus, unfollowUser } from '../../api/user'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
 import type { UserVO } from '../../types/user'
@@ -14,8 +14,13 @@ const message = useMessage()
 const auth = useAuthStore()
 
 const loading = ref(false)
+const followStatusLoading = ref(false)
+const followActionLoading = ref(false)
+const isFollowing = ref(false)
+const followButtonHovered = ref(false)
 const user = ref<UserVO | null>(null)
 const loadError = ref('')
+let followStatusRequestId = 0
 
 const userId = computed(() => {
   const raw = route.params.id
@@ -30,6 +35,13 @@ const roleLabel = computed(() => (user.value?.userRole === 'admin' ? '管理员'
 const profileText = computed(() => user.value?.userProfile || '暂无个人简介')
 const createdAt = computed(() => formatDate(user.value?.createTime))
 const updatedAt = computed(() => formatDate(user.value?.updateTime))
+const followerCount = computed(() => user.value?.followerCount ?? 0)
+const followingCount = computed(() => user.value?.followingCount ?? 0)
+const followButtonLabel = computed(() => {
+  if (!auth.isAuthenticated) return '登录后关注'
+  if (isFollowing.value) return followButtonHovered.value ? '取消关注' : '已关注'
+  return '关注'
+})
 
 function formatDate(value?: string) {
   if (!value) return '暂无'
@@ -61,6 +73,9 @@ async function loadUser() {
   loading.value = true
   loadError.value = ''
   user.value = null
+  followStatusRequestId += 1
+  isFollowing.value = false
+  followButtonHovered.value = false
 
   try {
     const response = await getUserById(userId.value)
@@ -70,6 +85,7 @@ async function loadUser() {
       return
     }
     user.value = nextUser
+    await loadFollowStatus(nextUser.id)
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '用户不存在'
     loadError.value = errorMessage === '用户不存在' ? '该用户已注销' : errorMessage
@@ -77,6 +93,77 @@ async function loadUser() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadFollowStatus(id: number) {
+  const requestId = ++followStatusRequestId
+  followStatusLoading.value = true
+  try {
+    const response = await getUserFollowStatus(id)
+    if (requestId !== followStatusRequestId) return
+    isFollowing.value = response.data.data === true
+  } catch {
+    if (requestId !== followStatusRequestId) return
+    isFollowing.value = false
+  } finally {
+    if (requestId === followStatusRequestId) {
+      followStatusLoading.value = false
+    }
+  }
+}
+
+function updateFollowerCount(delta: number) {
+  if (!user.value) return
+  user.value = {
+    ...user.value,
+    followerCount: Math.max(0, (user.value.followerCount ?? 0) + delta),
+  }
+}
+
+async function toggleFollow() {
+  if (!user.value) return
+
+  if (!auth.isAuthenticated) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+
+  followActionLoading.value = true
+  try {
+    if (isFollowing.value) {
+      await unfollowUser(user.value.id)
+      followStatusRequestId += 1
+      isFollowing.value = false
+      updateFollowerCount(-1)
+      message.success('已取消关注')
+    } else {
+      await followUser(user.value.id)
+      followStatusRequestId += 1
+      isFollowing.value = true
+      updateFollowerCount(1)
+      message.success('关注成功')
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '操作失败'
+    if (errorMessage.includes('已关注该用户')) {
+      followStatusRequestId += 1
+      isFollowing.value = true
+      return
+    }
+    if (errorMessage.includes('未关注该用户')) {
+      followStatusRequestId += 1
+      isFollowing.value = false
+      return
+    }
+    message.error(errorMessage)
+  } finally {
+    followActionLoading.value = false
+  }
+}
+
+function goToFollowList(type: 'followers' | 'following') {
+  if (userId.value === null) return
+  void router.push(`/user/${userId.value}/${type}`)
 }
 
 watch(userId, () => {
@@ -104,6 +191,32 @@ watch(userId, () => {
               <h1>{{ displayName }}</h1>
               <p>{{ user.userAccount }}</p>
             </div>
+            <div class="creator-actions">
+              <n-button
+                :type="isFollowing ? 'default' : 'primary'"
+                :loading="followActionLoading || followStatusLoading"
+                :title="isFollowing ? '点击取消关注' : undefined"
+                @mouseenter="followButtonHovered = true"
+                @mouseleave="followButtonHovered = false"
+                @click="toggleFollow"
+              >
+                <template #icon>
+                  <n-icon :component="isFollowing ? PeopleOutline : PersonAddOutline" />
+                </template>
+                {{ followButtonLabel }}
+              </n-button>
+            </div>
+          </div>
+
+          <div class="follow-stats">
+            <button class="stat-button" type="button" @click="goToFollowList('followers')">
+              <strong>{{ followerCount }}</strong>
+              <span>粉丝</span>
+            </button>
+            <button class="stat-button" type="button" @click="goToFollowList('following')">
+              <strong>{{ followingCount }}</strong>
+              <span>关注</span>
+            </button>
           </div>
 
           <n-descriptions :column="1" bordered label-placement="left" size="medium">
@@ -159,18 +272,58 @@ watch(userId, () => {
 }
 
 .creator-content {
-  max-width: 720px;
+  max-width: 760px;
 }
 
 .creator-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
-  margin-bottom: 26px;
+  margin-bottom: 18px;
 }
 
 .creator-title {
   min-width: 0;
+}
+
+.creator-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.follow-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.stat-button {
+  min-width: 108px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #4b5563;
+  cursor: pointer;
+  text-align: left;
+}
+
+.stat-button:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.stat-button strong {
+  color: #111827;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.stat-button span {
+  font-size: 13px;
 }
 
 h1,
@@ -230,8 +383,20 @@ h2 {
   }
 
   .creator-header {
-    align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .creator-actions,
+  .creator-actions .n-button,
+  .follow-stats,
+  .stat-button {
+    width: 100%;
+  }
+
+  .follow-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

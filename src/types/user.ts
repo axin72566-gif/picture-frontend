@@ -29,9 +29,19 @@ export interface UserVO {
   userRole: string
   createTime: string
   updateTime: string
+  followerCount: number
+  followingCount: number
 }
 
 export interface LoginResult {
   token: string
   user: UserVO
+}
+
+export interface PageResponse<T> {
+  records: T[]
+  total: number
+  size: number
+  current: number
+  pages: number
 }

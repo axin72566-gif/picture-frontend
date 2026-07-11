@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import {
   CreateOutline,
   ImageOutline,
   OpenOutline,
+  PeopleOutline,
+  PersonAddOutline,
   RefreshOutline,
   SearchOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
 import { deletePicture, getMyPicturePage, getPublicPicturePage, updatePicture } from '../api/picture'
+import { followUser, getUserFollowStatus, unfollowUser } from '../api/user'
 import { useAuthStore } from '../stores/authStore'
 import type { PageResult, PictureSortField, PictureVO, SortOrder } from '../types/picture'
 import UserAvatar from './UserAvatar.vue'
@@ -28,6 +31,7 @@ const props = withDefaults(
 )
 
 const message = useMessage()
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -38,6 +42,11 @@ const editingDescription = ref('')
 const savingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const detailPicture = ref<PictureVO | null>(null)
+const detailFollowLoading = ref(false)
+const detailFollowActionLoading = ref(false)
+const detailCreatorFollowing = ref(false)
+const detailFollowHovered = ref(false)
+let detailFollowStatusRequestId = 0
 
 const query = reactive({
   current: 1,
@@ -69,6 +78,19 @@ const detailVisible = computed({
       closePictureDetail()
     }
   },
+})
+const detailCreatorId = computed(() => {
+  const picture = detailPicture.value
+  return picture?.userId || picture?.user?.id || null
+})
+const canFollowDetailCreator = computed(() => {
+  const creatorId = detailCreatorId.value
+  return Boolean(creatorId && auth.user?.id !== creatorId)
+})
+const detailFollowLabel = computed(() => {
+  if (!auth.isAuthenticated) return '登录后关注'
+  if (detailCreatorFollowing.value) return detailFollowHovered.value ? '取消关注' : '已关注'
+  return '关注'
 })
 
 const sortFieldOptions = [
@@ -200,10 +222,16 @@ async function handleDelete(picture: PictureVO) {
 
 function showPictureDetail(picture: PictureVO) {
   detailPicture.value = picture
+  void loadDetailFollowStatus()
 }
 
 function closePictureDetail() {
   detailPicture.value = null
+  detailFollowStatusRequestId += 1
+  detailCreatorFollowing.value = false
+  detailFollowLoading.value = false
+  detailFollowActionLoading.value = false
+  detailFollowHovered.value = false
 }
 
 function openImage(url?: string) {
@@ -226,6 +254,91 @@ function goToCreatorProfile(picture: PictureVO) {
     return
   }
   void router.push(`/user/${creatorId}`)
+}
+
+async function loadDetailFollowStatus() {
+  const creatorId = detailCreatorId.value
+  const requestId = ++detailFollowStatusRequestId
+  detailCreatorFollowing.value = false
+  if (!creatorId || auth.user?.id === creatorId) return
+
+  detailFollowLoading.value = true
+  try {
+    const response = await getUserFollowStatus(creatorId)
+    if (requestId !== detailFollowStatusRequestId) return
+    detailCreatorFollowing.value = response.data.data === true
+  } catch {
+    if (requestId !== detailFollowStatusRequestId) return
+    detailCreatorFollowing.value = false
+  } finally {
+    if (requestId === detailFollowStatusRequestId) {
+      detailFollowLoading.value = false
+    }
+  }
+}
+
+function updateCreatorFollowerCount(delta: number) {
+  const creatorId = detailCreatorId.value
+  if (!creatorId) return
+
+  function patchPicture(picture: PictureVO) {
+    if (!picture.user || picture.user.id !== creatorId) return picture
+    return {
+      ...picture,
+      user: {
+        ...picture.user,
+        followerCount: Math.max(0, (picture.user.followerCount ?? 0) + delta),
+      },
+    }
+  }
+
+  if (detailPicture.value) {
+    detailPicture.value = patchPicture(detailPicture.value)
+  }
+
+  pageData.value.records = pageData.value.records.map(patchPicture)
+}
+
+async function toggleDetailCreatorFollow() {
+  const creatorId = detailCreatorId.value
+  if (!creatorId) return
+
+  if (!auth.isAuthenticated) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+
+  detailFollowActionLoading.value = true
+  try {
+    if (detailCreatorFollowing.value) {
+      await unfollowUser(creatorId)
+      detailFollowStatusRequestId += 1
+      detailCreatorFollowing.value = false
+      updateCreatorFollowerCount(-1)
+      message.success('已取消关注')
+    } else {
+      await followUser(creatorId)
+      detailFollowStatusRequestId += 1
+      detailCreatorFollowing.value = true
+      updateCreatorFollowerCount(1)
+      message.success('关注成功')
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '操作失败'
+    if (errorMessage.includes('已关注该用户')) {
+      detailFollowStatusRequestId += 1
+      detailCreatorFollowing.value = true
+      return
+    }
+    if (errorMessage.includes('未关注该用户')) {
+      detailFollowStatusRequestId += 1
+      detailCreatorFollowing.value = false
+      return
+    }
+    message.error(errorMessage)
+  } finally {
+    detailFollowActionLoading.value = false
+  }
 }
 
 function formatDate(value: string) {
@@ -439,14 +552,31 @@ onMounted(() => {
             <n-button quaternary @click="closePictureDetail">关闭</n-button>
           </div>
 
-          <button class="creator-row detail-creator" type="button" @click="goToCreatorProfile(detailPicture)">
-            <UserAvatar
-              :size="34"
-              :src="detailPicture.user?.userAvatar || ''"
-              :text="getCreatorAvatarText(detailPicture)"
-            />
-            <span :title="getCreatorName(detailPicture)">{{ getCreatorName(detailPicture) }}</span>
-          </button>
+          <div class="detail-creator">
+            <button class="creator-row detail-creator-main" type="button" @click="goToCreatorProfile(detailPicture)">
+              <UserAvatar
+                :size="34"
+                :src="detailPicture.user?.userAvatar || ''"
+                :text="getCreatorAvatarText(detailPicture)"
+              />
+              <span :title="getCreatorName(detailPicture)">{{ getCreatorName(detailPicture) }}</span>
+            </button>
+            <n-button
+              v-if="canFollowDetailCreator"
+              size="small"
+              :type="detailCreatorFollowing ? 'default' : 'primary'"
+              :loading="detailFollowLoading || detailFollowActionLoading"
+              :title="detailCreatorFollowing ? '点击取消关注' : undefined"
+              @mouseenter="detailFollowHovered = true"
+              @mouseleave="detailFollowHovered = false"
+              @click="toggleDetailCreatorFollow"
+            >
+              <template #icon>
+                <n-icon :component="detailCreatorFollowing ? PeopleOutline : PersonAddOutline" />
+              </template>
+              {{ detailFollowLabel }}
+            </n-button>
+          </div>
 
           <n-descriptions :column="1" bordered label-placement="left" size="small">
             <n-descriptions-item label="上传时间">
@@ -767,6 +897,11 @@ h1 {
 
 .detail-creator {
   width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -776,6 +911,10 @@ h1 {
 .detail-creator:hover {
   border-color: #2563eb;
   background: #eff6ff;
+}
+
+.detail-creator-main {
+  min-width: 0;
 }
 
 @media (max-width: 980px) {

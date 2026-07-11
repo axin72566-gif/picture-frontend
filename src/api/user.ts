@@ -3,11 +3,23 @@ import request from './request'
 import type {
   BaseResponse,
   LoginResult,
+  PageResponse,
   UserLoginRequest,
   UserRegisterRequest,
   UserUpdateRequest,
   UserVO,
 } from '../types/user'
+
+export interface UserFollowPageRequest {
+  current?: number
+  pageSize?: number
+}
+
+function cleanParams(params: UserFollowPageRequest) {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined),
+  )
+}
 
 export function userRegister(data: UserRegisterRequest) {
   return request.post<BaseResponse<number>>('/api/user/register', data)
@@ -40,4 +52,28 @@ export function uploadUserAvatar(file: File, onUploadProgress?: (event: AxiosPro
   return request.post<BaseResponse<string>>('/api/user/avatar/upload', formData, {
     onUploadProgress,
   })
+}
+
+export function followUser(followedId: number) {
+  return request.post<BaseResponse<null>>(`/api/user/follow/${followedId}`)
+}
+
+export function unfollowUser(followedId: number) {
+  return request.delete<BaseResponse<null>>(`/api/user/follow/${followedId}`)
+}
+
+export function getUserFollowers(id: number, params: UserFollowPageRequest) {
+  return request.get<BaseResponse<PageResponse<UserVO>>>(`/api/user/${id}/followers`, {
+    params: cleanParams(params),
+  })
+}
+
+export function getUserFollowing(id: number, params: UserFollowPageRequest) {
+  return request.get<BaseResponse<PageResponse<UserVO>>>(`/api/user/${id}/following`, {
+    params: cleanParams(params),
+  })
+}
+
+export function getUserFollowStatus(id: number) {
+  return request.get<BaseResponse<boolean>>(`/api/user/${id}/follow/status`)
 }

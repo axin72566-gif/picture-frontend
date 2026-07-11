@@ -41,6 +41,8 @@ const updatedAt = computed(() => formatDate(auth.user?.updateTime))
 const profileText = computed(() => auth.user?.userProfile || '暂无个人简介')
 const avatarPreviewSrc = computed(() => avatarPreviewUrl.value || auth.avatarDisplayUrl || '')
 const selectedAvatarSize = computed(() => (selectedAvatarFile.value ? formatFileSize(selectedAvatarFile.value.size) : ''))
+const followerCount = computed(() => auth.user?.followerCount ?? 0)
+const followingCount = computed(() => auth.user?.followingCount ?? 0)
 
 const profileChanged = computed(() => {
   const currentName = auth.user?.userName || ''
@@ -240,6 +242,11 @@ async function handleLogout() {
   }
 }
 
+function goToFollowList(type: 'followers' | 'following') {
+  if (!auth.user?.id) return
+  void router.push(`/user/${auth.user.id}/${type}`)
+}
+
 onMounted(() => {
   void loadCurrentUser()
 })
@@ -260,6 +267,17 @@ onBeforeUnmount(() => {
               <h1>{{ auth.displayName }}</h1>
               <p>{{ auth.user?.userAccount }}</p>
             </div>
+          </div>
+
+          <div class="follow-stats">
+            <button class="stat-button" type="button" @click="goToFollowList('followers')">
+              <strong>{{ followerCount }}</strong>
+              <span>粉丝</span>
+            </button>
+            <button class="stat-button" type="button" @click="goToFollowList('following')">
+              <strong>{{ followingCount }}</strong>
+              <span>关注</span>
+            </button>
           </div>
 
           <n-descriptions :column="1" bordered label-placement="left" size="medium">
@@ -449,7 +467,41 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 18px;
-  margin-bottom: 26px;
+  margin-bottom: 18px;
+}
+
+.follow-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.stat-button {
+  min-width: 108px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #4b5563;
+  cursor: pointer;
+  text-align: left;
+}
+
+.stat-button:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.stat-button strong {
+  color: #111827;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.stat-button span {
+  font-size: 13px;
 }
 
 .avatar-text,
@@ -641,6 +693,16 @@ h2 {
   .profile-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .follow-stats,
+  .stat-button {
+    width: 100%;
+  }
+
+  .follow-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .form-actions,

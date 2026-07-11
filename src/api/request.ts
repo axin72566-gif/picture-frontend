@@ -45,10 +45,18 @@ function isPublicApi(config?: InternalAxiosRequestConfig) {
 
   if (url.includes('/api/user/register') || url.includes('/api/user/login')) return true
   if (/\/api\/picture\/page(\?|$)/.test(url)) return true
+  if (/\/api\/user\/\d+\/followers(\?|$)/.test(url)) return true
+  if (/\/api\/user\/\d+\/following(\?|$)/.test(url)) return true
+  if (/\/api\/user\/\d+\/follow\/status(\?|$)/.test(url)) return true
   // GET /api/user/{数字 id}，排除 /current、/update、/logout、/avatar 等
   if (/\/api\/user\/\d+(\?|$)/.test(url)) return true
 
   return false
+}
+
+function shouldAttachAuth(config?: InternalAxiosRequestConfig) {
+  const url = getRequestUrl(config)
+  return !isPublicApi(config) || /\/api\/user\/\d+\/follow\/status(\?|$)/.test(url)
 }
 
 function getBearerToken(config?: InternalAxiosRequestConfig) {
@@ -82,7 +90,7 @@ function handleUnauthorized(config?: InternalAxiosRequestConfig, message?: strin
 }
 
 request.interceptors.request.use((config) => {
-  if (!isPublicApi(config)) {
+  if (shouldAttachAuth(config)) {
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
