@@ -57,9 +57,19 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('user')
   }
 
+  /** 供 axios 拦截器同步清理 Pinia，避免与 localStorage 不一致 */
+  function syncClearedSession() {
+    token.value = null
+    user.value = null
+    avatarVersion.value = 0
+  }
+
   async function login(data: UserLoginRequest) {
     const response = await userApi.userLogin(data)
     const loginResult = response.data.data
+    if (!loginResult) {
+      throw new Error(response.data.message || '登录失败')
+    }
     persistSession(loginResult.token, loginResult.user)
     return loginResult.user
   }
@@ -70,10 +80,13 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    const currentToken = token.value
     try {
-      if (token.value) {
+      if (currentToken) {
         await userApi.userLogout()
       }
+    } catch {
+      // 退出接口失败（含 token 已失效）时仍清理本地登录态
     } finally {
       clearSession()
     }
@@ -86,35 +99,37 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     const response = await userApi.getCurrentUser()
-    persistUser(response.data.data)
-    return response.data.data
+    const currentUser = response.data.data
+    if (!currentUser) {
+      clearSession()
+      throw new Error(response.data.message || '用户不存在')
+    }
+    persistUser(currentUser)
+    return currentUser
   }
 
   async function updateProfile(data: UserUpdateRequest) {
     const response = await userApi.updateCurrentUser(data)
-    persistUser(response.data.data)
-    return response.data.data
+    const updatedUser = response.data.data
+    if (!updatedUser) {
+      throw new Error(response.data.message || '资料更新失败')
+    }
+    persistUser(updatedUser)
+    return updatedUser
   }
 
   async function uploadAvatar(file: File, onUploadProgress?: (event: AxiosProgressEvent) => void) {
     const response = await userApi.uploadUserAvatar(file, onUploadProgress)
     const nextAvatarUrl = response.data.data
+    if (!nextAvatarUrl) {
+      throw new Error(response.data.message || '头像上传失败')
+    }
 
-    try {
-      const latestUser = await fetchCurrentUser()
-      if (latestUser && latestUser.userAvatar !== nextAvatarUrl) {
-        persistUser({
-          ...latestUser,
-          userAvatar: nextAvatarUrl,
-        })
-      }
-    } catch {
-      if (user.value) {
-        persistUser({
-          ...user.value,
-          userAvatar: nextAvatarUrl,
-        })
-      }
+    if (user.value) {
+      persistUser({
+        ...user.value,
+        userAvatar: nextAvatarUrl,
+      })
     }
 
     avatarVersion.value += 1
@@ -147,6 +162,8 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     logout,
+    clearSession,
+    syncClearedSession,
     fetchCurrentUser,
     updateProfile,
     uploadAvatar,

@@ -30,6 +30,11 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/user/:id',
+      name: 'creator-profile',
+      component: () => import('../pages/user/CreatorProfilePage.vue'),
+    },
+    {
       path: '/my-pictures',
       name: 'my-pictures',
       redirect: '/profile',

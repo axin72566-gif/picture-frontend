@@ -66,11 +66,6 @@ async function handleMenuSelect(key: string | number) {
   }
 
   if (key === 'profile') {
-    try {
-      await auth.fetchCurrentUser()
-    } catch {
-      // The global interceptor handles expired sessions; navigation can still continue.
-    }
     await router.push('/profile')
     return
   }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import {
   CheckmarkCircleOutline,
@@ -14,6 +15,7 @@ import UserAvatar from '../../components/UserAvatar.vue'
 const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const maxFileSize = 10 * 1024 * 1024
 
+const router = useRouter()
 const message = useMessage()
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
@@ -36,6 +38,15 @@ const resultCreatorName = computed(
 )
 const resultCreatorAvatar = computed(() => uploadResult.value?.user?.userAvatar || '')
 const resultCreatorAvatarText = computed(() => resultCreatorName.value.slice(0, 1).toUpperCase())
+
+function goToCreatorProfile() {
+  const creatorId = uploadResult.value?.userId || uploadResult.value?.user?.id
+  if (!creatorId) {
+    message.warning('无法查看该用户资料')
+    return
+  }
+  void router.push(`/user/${creatorId}`)
+}
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`
@@ -127,8 +138,12 @@ async function submitUpload() {
         progress.value = Math.round((event.loaded / event.total) * 100)
       }
     })
-    uploadResult.value = response.data.data
-    editName.value = response.data.data.name
+    const uploaded = response.data.data
+    if (!uploaded) {
+      throw new Error(response.data.message || '图片上传失败')
+    }
+    uploadResult.value = uploaded
+    editName.value = uploaded.name
     progress.value = 100
     message.success('图片上传成功')
   } catch (error) {
@@ -154,8 +169,12 @@ async function submitPictureInfo() {
       id: uploadResult.value.id,
       name: nextName,
     })
-    uploadResult.value = response.data.data
-    editName.value = response.data.data.name
+    const updated = response.data.data
+    if (!updated) {
+      throw new Error(response.data.message || '更新失败')
+    }
+    uploadResult.value = updated
+    editName.value = updated.name
     message.success('图片信息已更新')
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '更新失败'
@@ -275,13 +294,13 @@ onBeforeUnmount(() => {
             </n-button>
           </n-form>
 
-          <div class="creator-summary">
+          <button class="creator-summary" type="button" @click="goToCreatorProfile">
             <UserAvatar :size="34" :src="resultCreatorAvatar" :text="resultCreatorAvatarText" />
             <div>
               <span>创建者</span>
               <strong>{{ resultCreatorName }}</strong>
             </div>
-          </div>
+          </button>
 
           <n-descriptions :column="1" bordered label-placement="left" size="small">
             <n-descriptions-item label="图片 ID">
@@ -491,6 +510,16 @@ h1 {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.creator-summary:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
 }
 
 .creator-summary div {

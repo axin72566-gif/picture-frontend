@@ -89,7 +89,11 @@ async function fetchPictures() {
       props.mode === 'mine'
         ? await getMyPicturePage(buildParams())
         : await getPublicPicturePage(buildParams())
-    pageData.value = response.data.data
+    const nextPage = response.data.data
+    if (!nextPage) {
+      throw new Error(response.data.message || '图片加载失败')
+    }
+    pageData.value = nextPage
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '图片加载失败'
     message.error(errorMessage)
@@ -138,9 +142,13 @@ async function submitEdit(picture: PictureVO) {
   savingId.value = picture.id
   try {
     const response = await updatePicture({ id: picture.id, name: nextName })
+    const updated = response.data.data
+    if (!updated) {
+      throw new Error(response.data.message || '更新失败')
+    }
     const index = pageData.value.records.findIndex((item) => item.id === picture.id)
     if (index >= 0) {
-      pageData.value.records[index] = response.data.data
+      pageData.value.records[index] = updated
     }
     message.success('图片名称已更新')
     cancelEdit()
@@ -179,6 +187,15 @@ function getCreatorName(picture: PictureVO) {
 
 function getCreatorAvatarText(picture: PictureVO) {
   return getCreatorName(picture).slice(0, 1).toUpperCase()
+}
+
+function goToCreatorProfile(picture: PictureVO) {
+  const creatorId = picture.userId || picture.user?.id
+  if (!creatorId) {
+    message.warning('无法查看该用户资料')
+    return
+  }
+  void router.push(`/user/${creatorId}`)
 }
 
 function formatDate(value: string) {
@@ -272,14 +289,14 @@ onMounted(() => {
                 <span>{{ formatDate(picture.createTime) }}</span>
               </div>
 
-              <div class="creator-row">
+              <button class="creator-row" type="button" @click="goToCreatorProfile(picture)">
                 <UserAvatar
                   :size="26"
                   :src="picture.user?.userAvatar || ''"
                   :text="getCreatorAvatarText(picture)"
                 />
                 <span :title="getCreatorName(picture)">{{ getCreatorName(picture) }}</span>
-              </div>
+              </button>
 
               <div v-if="isMine" class="card-actions">
                 <n-tooltip trigger="hover">
@@ -483,8 +500,17 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #4b5563;
   font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.creator-row:hover span:last-child {
+  color: #2563eb;
 }
 
 .creator-row span:last-child {

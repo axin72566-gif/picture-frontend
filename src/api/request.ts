@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosError, AxiosResponse } from 'axios'
+import type { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import type { BaseResponse } from '../types/user'
 
 const request = axios.create({
@@ -8,27 +8,85 @@ const request = axios.create({
   withCredentials: true,
 })
 
+/** 与 Pinia 同步清理登录态，避免只清 localStorage 导致状态不一致 */
+let onAuthCleared: (() => void) | null = null
+
+export function setAuthClearedHandler(handler: (() => void) | null) {
+  onAuthCleared = handler
+}
+
 function clearStoredAuth() {
   localStorage.removeItem('token')
   localStorage.removeItem('user')
+  onAuthCleared?.()
 }
 
 function redirectToLogin() {
-  if (window.location.pathname !== '/login') {
-    const redirect = window.location.pathname + window.location.search
-    const target = redirect && redirect !== '/' ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'
-    window.location.href = target
-  }
+  if (window.location.pathname === '/login') return
+
+  const redirect = window.location.pathname + window.location.search
+  const target =
+    redirect && redirect !== '/' ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'
+  window.location.href = target
 }
 
 function buildError(message?: string) {
   return new Error(message || '请求失败，请稍后重试')
 }
 
+function getRequestUrl(config?: InternalAxiosRequestConfig) {
+  return `${config?.baseURL || ''}${config?.url || ''}`
+}
+
+/** 文档约定的无需登录接口：不附带 Authorization，避免过期 token 污染公开请求 */
+function isPublicApi(config?: InternalAxiosRequestConfig) {
+  const url = getRequestUrl(config)
+  if (!url) return false
+
+  if (url.includes('/api/user/register') || url.includes('/api/user/login')) return true
+  if (/\/api\/picture\/page(\?|$)/.test(url)) return true
+  // GET /api/user/{数字 id}，排除 /current、/update、/logout、/avatar 等
+  if (/\/api\/user\/\d+(\?|$)/.test(url)) return true
+
+  return false
+}
+
+function getBearerToken(config?: InternalAxiosRequestConfig) {
+  const header = config?.headers?.Authorization
+  const value = typeof header === 'string' ? header : Array.isArray(header) ? header[0] : ''
+  const match = /^Bearer\s+(.+)$/i.exec(value || '')
+  return match?.[1] || null
+}
+
+/** 仅当 401 对应的仍是「当前 token」时才清会话，避免过期请求清掉新登录态 */
+function shouldClearSessionForUnauthorized(config?: InternalAxiosRequestConfig) {
+  const requestToken = getBearerToken(config)
+  const currentToken = localStorage.getItem('token')
+
+  if (!currentToken) return false
+  if (!requestToken) return true
+  return requestToken === currentToken
+}
+
+function handleUnauthorized(config?: InternalAxiosRequestConfig, message?: string) {
+  if (isPublicApi(config)) {
+    return Promise.reject(buildError(message || '请求失败，请稍后重试'))
+  }
+
+  if (shouldClearSessionForUnauthorized(config)) {
+    clearStoredAuth()
+    redirectToLogin()
+  }
+
+  return Promise.reject(buildError(message || '登录已过期，请重新登录'))
+}
+
 request.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  if (!isPublicApi(config)) {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
   }
   return config
 })
@@ -38,9 +96,7 @@ request.interceptors.response.use(
     const payload = response.data
 
     if (payload?.code === 40100) {
-      clearStoredAuth()
-      redirectToLogin()
-      return Promise.reject(buildError(payload.message || '登录已过期，请重新登录'))
+      return handleUnauthorized(response.config, payload.message)
     }
 
     if (typeof payload?.code === 'number' && payload.code !== 0) {
@@ -54,8 +110,7 @@ request.interceptors.response.use(
     const payload = error.response?.data
 
     if (status === 401 || payload?.code === 40100) {
-      clearStoredAuth()
-      redirectToLogin()
+      return handleUnauthorized(error.config, payload?.message)
     }
 
     return Promise.reject(buildError(payload?.message || error.message))

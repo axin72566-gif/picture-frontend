@@ -25,6 +25,10 @@ export function getCurrentUser() {
   return request.get<BaseResponse<UserVO>>('/api/user/current')
 }
 
+export function getUserById(id: number) {
+  return request.get<BaseResponse<UserVO>>(`/api/user/${id}`)
+}
+
 export function updateCurrentUser(data: UserUpdateRequest) {
   return request.put<BaseResponse<UserVO>>('/api/user/update', data)
 }

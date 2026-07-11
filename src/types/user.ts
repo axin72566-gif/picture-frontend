@@ -1,6 +1,6 @@
 export interface BaseResponse<T> {
   code: number
-  data: T
+  data: T | null
   message: string
 }
 
@@ -16,8 +16,8 @@ export interface UserLoginRequest {
 }
 
 export interface UserUpdateRequest {
-  userName?: string
-  userProfile?: string
+  userName?: string | null
+  userProfile?: string | null
 }
 
 export interface UserVO {
