@@ -33,6 +33,7 @@ const auth = useAuthStore()
 const loading = ref(false)
 const editingId = ref<number | null>(null)
 const editingName = ref('')
+const editingDescription = ref('')
 const savingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 
@@ -40,6 +41,7 @@ const query = reactive({
   current: 1,
   pageSize: 12,
   name: '',
+  description: '',
   minSizeMb: null as number | null,
   maxSizeMb: null as number | null,
   sortField: 'createTime' as PictureSortField,
@@ -75,6 +77,7 @@ function buildParams() {
     current: query.current,
     pageSize: query.pageSize,
     name: query.name.trim(),
+    description: query.description.trim(),
     minSize: query.minSizeMb ? Math.round(query.minSizeMb * 1024 * 1024) : null,
     maxSize: query.maxSizeMb ? Math.round(query.maxSizeMb * 1024 * 1024) : null,
     sortField: query.sortField,
@@ -109,6 +112,7 @@ function handleSearch() {
 
 function resetFilters() {
   query.name = ''
+  query.description = ''
   query.minSizeMb = null
   query.maxSizeMb = null
   query.sortField = 'createTime'
@@ -125,15 +129,18 @@ function handlePageChange(page: number) {
 function startEdit(picture: PictureVO) {
   editingId.value = picture.id
   editingName.value = picture.name
+  editingDescription.value = picture.description ?? ''
 }
 
 function cancelEdit() {
   editingId.value = null
   editingName.value = ''
+  editingDescription.value = ''
 }
 
 async function submitEdit(picture: PictureVO) {
   const nextName = editingName.value.trim()
+  const nextDescription = editingDescription.value.trim()
   if (!nextName) {
     message.warning('请输入图片名称')
     return
@@ -141,7 +148,11 @@ async function submitEdit(picture: PictureVO) {
 
   savingId.value = picture.id
   try {
-    const response = await updatePicture({ id: picture.id, name: nextName })
+    const response = await updatePicture({
+      id: picture.id,
+      name: nextName,
+      description: nextDescription,
+    })
     const updated = response.data.data
     if (!updated) {
       throw new Error(response.data.message || '更新失败')
@@ -150,7 +161,7 @@ async function submitEdit(picture: PictureVO) {
     if (index >= 0) {
       pageData.value.records[index] = updated
     }
-    message.success('图片名称已更新')
+    message.success('图片信息已更新')
     cancelEdit()
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '更新失败'
@@ -252,6 +263,16 @@ onMounted(() => {
           <n-icon :component="SearchOutline" />
         </template>
       </n-input>
+      <n-input
+        v-model:value="query.description"
+        clearable
+        placeholder="按图片简介搜索"
+        @keyup.enter="handleSearch"
+      >
+        <template #prefix>
+          <n-icon :component="SearchOutline" />
+        </template>
+      </n-input>
       <n-input-number v-model:value="query.minSizeMb" clearable :min="0" placeholder="最小 MB" />
       <n-input-number v-model:value="query.maxSizeMb" clearable :min="0" placeholder="最大 MB" />
       <n-select v-model:value="query.sortField" :options="sortFieldOptions" />
@@ -269,20 +290,40 @@ onMounted(() => {
             </button>
 
             <div class="picture-body">
-              <div v-if="editingId === picture.id" class="edit-row">
-                <n-input v-model:value="editingName" size="small" @keyup.enter="submitEdit(picture)" />
-                <n-button
+              <div v-if="editingId === picture.id" class="edit-form">
+                <n-input
+                  v-model:value="editingName"
                   size="small"
-                  type="primary"
-                  :loading="savingId === picture.id"
-                  @click="submitEdit(picture)"
-                >
-                  保存
-                </n-button>
-                <n-button size="small" quaternary @click="cancelEdit">取消</n-button>
+                  maxlength="120"
+                  placeholder="图片名称"
+                  @keyup.enter="submitEdit(picture)"
+                />
+                <n-input
+                  v-model:value="editingDescription"
+                  size="small"
+                  type="textarea"
+                  maxlength="512"
+                  show-count
+                  :autosize="{ minRows: 2, maxRows: 4 }"
+                  placeholder="图片简介"
+                />
+                <div class="edit-actions">
+                  <n-button
+                    size="small"
+                    type="primary"
+                    :loading="savingId === picture.id"
+                    @click="submitEdit(picture)"
+                  >
+                    保存
+                  </n-button>
+                  <n-button size="small" quaternary @click="cancelEdit">取消</n-button>
+                </div>
               </div>
               <template v-else>
                 <h2 :title="picture.name">{{ picture.name }}</h2>
+                <p class="picture-description" :class="{ 'picture-description--empty': !picture.description }">
+                  {{ picture.description || '暂无简介' }}
+                </p>
               </template>
 
               <div class="meta-row">
@@ -307,7 +348,7 @@ onMounted(() => {
                       </template>
                     </n-button>
                   </template>
-                  编辑名称
+                  编辑信息
                 </n-tooltip>
                 <n-popconfirm
                   positive-text="删除"
@@ -422,7 +463,7 @@ h1 {
 
 .filter-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 120px 120px 150px 120px auto auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) 110px 110px 140px 110px auto auto;
   gap: 10px;
   align-items: center;
   padding: 14px;
@@ -482,6 +523,20 @@ h1 {
   font-size: 13px;
 }
 
+.picture-description {
+  min-height: 38px;
+  overflow: hidden;
+  display: -webkit-box;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.picture-description--empty {
+  color: #9ca3af;
+}
+
 .meta-row {
   display: flex;
   justify-content: space-between;
@@ -526,11 +581,15 @@ h1 {
   min-height: 34px;
 }
 
-.edit-row {
+.edit-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
-  align-items: center;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .empty-state {

@@ -4,6 +4,7 @@ export interface PictureVO {
   id: number
   url: string
   name: string
+  description: string | null
   size: number
   width: number
   height: number
@@ -23,6 +24,7 @@ export interface PicturePageRequest {
   current?: number
   pageSize?: number
   name?: string
+  description?: string
   minSize?: number | null
   maxSize?: number | null
   sortField?: PictureSortField
@@ -39,5 +41,6 @@ export interface PageResult<T> {
 
 export interface PictureUpdateRequest {
   id: number
-  name: string
+  name?: string
+  description?: string
 }

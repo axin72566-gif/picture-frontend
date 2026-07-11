@@ -26,6 +26,7 @@ const savingInfo = ref(false)
 const progress = ref(0)
 const dragActive = ref(false)
 const editName = ref('')
+const editDescription = ref('')
 
 const fileSizeText = computed(() => {
   if (!selectedFile.value) return ''
@@ -105,6 +106,7 @@ function selectFile(file: File) {
   selectedFile.value = file
   uploadResult.value = null
   editName.value = ''
+  editDescription.value = ''
   progress.value = 0
   previewUrl.value = URL.createObjectURL(file)
 }
@@ -121,6 +123,7 @@ function clearSelection() {
   selectedFile.value = null
   uploadResult.value = null
   editName.value = ''
+  editDescription.value = ''
   progress.value = 0
 }
 
@@ -144,6 +147,7 @@ async function submitUpload() {
     }
     uploadResult.value = uploaded
     editName.value = uploaded.name
+    editDescription.value = uploaded.description ?? ''
     progress.value = 100
     message.success('图片上传成功')
   } catch (error) {
@@ -158,6 +162,7 @@ async function submitPictureInfo() {
   if (!uploadResult.value) return
 
   const nextName = editName.value.trim()
+  const nextDescription = editDescription.value.trim()
   if (!nextName) {
     message.warning('请输入图片名称')
     return
@@ -168,6 +173,7 @@ async function submitPictureInfo() {
     const response = await updatePicture({
       id: uploadResult.value.id,
       name: nextName,
+      description: nextDescription,
     })
     const updated = response.data.data
     if (!updated) {
@@ -175,6 +181,7 @@ async function submitPictureInfo() {
     }
     uploadResult.value = updated
     editName.value = updated.name
+    editDescription.value = updated.description ?? ''
     message.success('图片信息已更新')
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '更新失败'
@@ -285,8 +292,20 @@ onBeforeUnmount(() => {
               <n-input
                 v-model:value="editName"
                 clearable
+                maxlength="120"
                 placeholder="请输入图片名称"
                 @keyup.enter="submitPictureInfo"
+              />
+            </n-form-item>
+            <n-form-item label="图片简介">
+              <n-input
+                v-model:value="editDescription"
+                clearable
+                type="textarea"
+                maxlength="512"
+                show-count
+                :autosize="{ minRows: 3, maxRows: 6 }"
+                placeholder="请输入图片简介"
               />
             </n-form-item>
             <n-button block type="primary" :loading="savingInfo" @click="submitPictureInfo">
@@ -308,6 +327,9 @@ onBeforeUnmount(() => {
             </n-descriptions-item>
             <n-descriptions-item label="文件名">
               {{ uploadResult.name }}
+            </n-descriptions-item>
+            <n-descriptions-item label="图片简介">
+              <span class="description-value">{{ uploadResult.description || '暂无简介' }}</span>
             </n-descriptions-item>
             <n-descriptions-item label="上传时间">
               {{ resultCreatedAt }}
@@ -499,6 +521,11 @@ h1 {
 .info-form {
   display: grid;
   gap: 8px;
+}
+
+.description-value {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .creator-summary {
