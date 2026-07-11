@@ -49,7 +49,7 @@ function formatDate(value?: string) {
 async function loadUser() {
   if (userId.value === null) {
     user.value = null
-    loadError.value = '无效的用户 ID'
+    loadError.value = '无效的用户资料链接'
     return
   }
 
@@ -107,9 +107,6 @@ watch(userId, () => {
           </div>
 
           <n-descriptions :column="1" bordered label-placement="left" size="medium">
-            <n-descriptions-item label="用户 ID">
-              {{ user.id }}
-            </n-descriptions-item>
             <n-descriptions-item label="账号">
               {{ user.userAccount }}
             </n-descriptions-item>

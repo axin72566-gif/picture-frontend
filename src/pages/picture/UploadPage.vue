@@ -322,9 +322,6 @@ onBeforeUnmount(() => {
           </button>
 
           <n-descriptions :column="1" bordered label-placement="left" size="small">
-            <n-descriptions-item label="图片 ID">
-              {{ uploadResult.id }}
-            </n-descriptions-item>
             <n-descriptions-item label="文件名">
               {{ uploadResult.name }}
             </n-descriptions-item>

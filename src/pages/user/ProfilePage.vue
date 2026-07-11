@@ -263,9 +263,6 @@ onBeforeUnmount(() => {
           </div>
 
           <n-descriptions :column="1" bordered label-placement="left" size="medium">
-            <n-descriptions-item label="用户 ID">
-              {{ auth.user?.id }}
-            </n-descriptions-item>
             <n-descriptions-item label="账号">
               {{ auth.user?.userAccount }}
             </n-descriptions-item>

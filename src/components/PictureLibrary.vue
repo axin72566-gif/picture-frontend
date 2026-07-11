@@ -449,9 +449,6 @@ onMounted(() => {
           </button>
 
           <n-descriptions :column="1" bordered label-placement="left" size="small">
-            <n-descriptions-item label="图片 ID">
-              {{ detailPicture.id }}
-            </n-descriptions-item>
             <n-descriptions-item label="上传时间">
               {{ formatDate(detailPicture.createTime) }}
             </n-descriptions-item>
