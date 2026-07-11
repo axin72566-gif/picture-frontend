@@ -8,7 +8,7 @@ const request = axios.create({
   withCredentials: true,
 })
 
-/** 与 Pinia 同步清理登录态，避免只清 localStorage 导致状态不一致 */
+/** 与 Pinia 同步清理登录态，避免只清 sessionStorage 导致状态不一致 */
 let onAuthCleared: (() => void) | null = null
 
 export function setAuthClearedHandler(handler: (() => void) | null) {
@@ -16,8 +16,8 @@ export function setAuthClearedHandler(handler: (() => void) | null) {
 }
 
 function clearStoredAuth() {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
+  sessionStorage.removeItem('token')
+  sessionStorage.removeItem('user')
   onAuthCleared?.()
 }
 
@@ -69,7 +69,7 @@ function getBearerToken(config?: InternalAxiosRequestConfig) {
 /** 仅当 401 对应的仍是「当前 token」时才清会话，避免过期请求清掉新登录态 */
 function shouldClearSessionForUnauthorized(config?: InternalAxiosRequestConfig) {
   const requestToken = getBearerToken(config)
-  const currentToken = localStorage.getItem('token')
+  const currentToken = sessionStorage.getItem('token')
 
   if (!currentToken) return false
   if (!requestToken) return true
@@ -91,7 +91,7 @@ function handleUnauthorized(config?: InternalAxiosRequestConfig, message?: strin
 
 request.interceptors.request.use((config) => {
   if (shouldAttachAuth(config)) {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

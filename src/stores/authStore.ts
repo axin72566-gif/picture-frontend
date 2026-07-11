@@ -4,20 +4,27 @@ import type { AxiosProgressEvent } from 'axios'
 import * as userApi from '../api/user'
 import type { UserLoginRequest, UserRegisterRequest, UserUpdateRequest, UserVO } from '../types/user'
 
+function clearLegacyLocalAuth() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+}
+
 function readStoredUser() {
-  const rawUser = localStorage.getItem('user')
+  const rawUser = sessionStorage.getItem('user')
   if (!rawUser) return null
 
   try {
     return JSON.parse(rawUser) as UserVO
   } catch {
-    localStorage.removeItem('user')
+    sessionStorage.removeItem('user')
     return null
   }
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('token'))
+  clearLegacyLocalAuth()
+
+  const token = ref<string | null>(sessionStorage.getItem('token'))
   const user = ref<UserVO | null>(readStoredUser())
   const initializing = ref(false)
   const avatarVersion = ref(0)
@@ -31,7 +38,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function persistSession(nextToken: string, nextUser: UserVO) {
     token.value = nextToken
-    localStorage.setItem('token', nextToken)
+    sessionStorage.setItem('token', nextToken)
     persistUser(nextUser)
   }
 
@@ -46,18 +53,18 @@ export const useAuthStore = defineStore('auth', () => {
     if ((normalizedUser.userAvatar || '') !== previousAvatar) {
       avatarVersion.value += 1
     }
-    localStorage.setItem('user', JSON.stringify(normalizedUser))
+    sessionStorage.setItem('user', JSON.stringify(normalizedUser))
   }
 
   function clearSession() {
     token.value = null
     user.value = null
     avatarVersion.value = 0
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    sessionStorage.removeItem('token')
+    sessionStorage.removeItem('user')
   }
 
-  /** 供 axios 拦截器同步清理 Pinia，避免与 localStorage 不一致 */
+  /** 供 axios 拦截器同步清理 Pinia，避免与 sessionStorage 不一致 */
   function syncClearedSession() {
     token.value = null
     user.value = null
