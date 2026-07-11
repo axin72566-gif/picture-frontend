@@ -5,6 +5,7 @@ import { useMessage } from 'naive-ui'
 import {
   CreateOutline,
   ImageOutline,
+  OpenOutline,
   RefreshOutline,
   SearchOutline,
   TrashOutline,
@@ -36,6 +37,7 @@ const editingName = ref('')
 const editingDescription = ref('')
 const savingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
+const detailPicture = ref<PictureVO | null>(null)
 
 const query = reactive({
   current: 1,
@@ -60,6 +62,14 @@ const isMine = computed(() => props.mode === 'mine')
 const records = computed(() => pageData.value.records)
 const rootClass = computed(() => ({ 'library-page--embedded': props.embedded }))
 const sectionClass = computed(() => (props.embedded ? 'library-section' : 'page-width'))
+const detailVisible = computed({
+  get: () => Boolean(detailPicture.value),
+  set: (value: boolean) => {
+    if (!value) {
+      closePictureDetail()
+    }
+  },
+})
 
 const sortFieldOptions = [
   { label: '上传时间', value: 'createTime' },
@@ -188,7 +198,16 @@ async function handleDelete(picture: PictureVO) {
   }
 }
 
-function openImage(url: string) {
+function showPictureDetail(picture: PictureVO) {
+  detailPicture.value = picture
+}
+
+function closePictureDetail() {
+  detailPicture.value = null
+}
+
+function openImage(url?: string) {
+  if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
@@ -220,6 +239,12 @@ function formatDate(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(2)} MB`
 }
 
 watch(
@@ -285,7 +310,7 @@ onMounted(() => {
       <n-spin :show="loading">
         <div v-if="records.length" class="picture-grid">
           <article v-for="picture in records" :key="picture.id" class="picture-card">
-            <button class="image-button" type="button" @click="openImage(picture.url)">
+            <button class="image-button" type="button" @click="showPictureDetail(picture)">
               <img :src="picture.url" :alt="picture.name" loading="lazy" />
             </button>
 
@@ -396,6 +421,63 @@ onMounted(() => {
         "
       />
     </section>
+
+    <n-modal v-model:show="detailVisible" :auto-focus="false">
+      <div v-if="detailPicture" class="picture-detail-dialog">
+        <div class="detail-preview">
+          <img :src="detailPicture.url" :alt="detailPicture.name" />
+        </div>
+
+        <div class="detail-panel">
+          <div class="detail-header">
+            <div>
+              <h2 :title="detailPicture.name">{{ detailPicture.name }}</h2>
+              <p :class="{ 'picture-description--empty': !detailPicture.description }">
+                {{ detailPicture.description || '暂无简介' }}
+              </p>
+            </div>
+            <n-button quaternary @click="closePictureDetail">关闭</n-button>
+          </div>
+
+          <button class="creator-row detail-creator" type="button" @click="goToCreatorProfile(detailPicture)">
+            <UserAvatar
+              :size="34"
+              :src="detailPicture.user?.userAvatar || ''"
+              :text="getCreatorAvatarText(detailPicture)"
+            />
+            <span :title="getCreatorName(detailPicture)">{{ getCreatorName(detailPicture) }}</span>
+          </button>
+
+          <n-descriptions :column="1" bordered label-placement="left" size="small">
+            <n-descriptions-item label="图片 ID">
+              {{ detailPicture.id }}
+            </n-descriptions-item>
+            <n-descriptions-item label="上传时间">
+              {{ formatDate(detailPicture.createTime) }}
+            </n-descriptions-item>
+            <n-descriptions-item label="尺寸">
+              {{ detailPicture.width }} x {{ detailPicture.height }}
+            </n-descriptions-item>
+            <n-descriptions-item label="文件大小">
+              {{ formatFileSize(detailPicture.size) }}
+            </n-descriptions-item>
+            <n-descriptions-item label="格式">
+              {{ detailPicture.format || detailPicture.contentType }}
+            </n-descriptions-item>
+            <n-descriptions-item label="类型">
+              {{ detailPicture.contentType }}
+            </n-descriptions-item>
+          </n-descriptions>
+
+          <n-button type="primary" block @click="openImage(detailPicture.url)">
+            <template #icon>
+              <n-icon :component="OpenOutline" />
+            </template>
+            打开原图
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -625,6 +707,80 @@ h1 {
   margin-top: 26px;
 }
 
+.picture-detail-dialog {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+}
+
+.detail-preview {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  background: #0f172a;
+}
+
+.detail-preview img {
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 48px);
+  display: block;
+  object-fit: contain;
+}
+
+.detail-panel {
+  min-width: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 20px;
+}
+
+.detail-header {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.detail-header h2 {
+  overflow: hidden;
+  color: #111827;
+  font-size: 20px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-header p {
+  margin-top: 8px;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.detail-creator {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.detail-creator:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
 @media (max-width: 980px) {
   .library-hero {
     align-items: stretch;
@@ -637,6 +793,19 @@ h1 {
 
   .picture-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .picture-detail-dialog {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .detail-preview {
+    min-height: 320px;
+  }
+
+  .detail-preview img {
+    max-height: 50vh;
   }
 }
 
@@ -656,5 +825,21 @@ h1 {
     width: 100%;
   }
 
+  .picture-detail-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .detail-preview {
+    min-height: 240px;
+  }
+
+  .detail-panel {
+    padding: 16px;
+  }
+
+  .detail-header {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
