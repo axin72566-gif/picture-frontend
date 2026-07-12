@@ -33,6 +33,11 @@ export function useNotificationNavigation() {
 
     if ((item.type === 'COMMENT' || item.type === 'REPLY' || item.type === 'LIKE') && item.pictureId) {
       await router.push({ path: '/', query: { pictureId: String(item.pictureId) } })
+      return
+    }
+
+    if (item.type === 'SPACE_INVITE') {
+      await router.push('/spaces/invites')
     }
   }
 

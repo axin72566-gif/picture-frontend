@@ -36,6 +36,24 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/spaces',
+      name: 'spaces',
+      component: () => import('../pages/space/SpaceListPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/spaces/invites',
+      name: 'space-invites',
+      component: () => import('../pages/space/SpaceInvitePendingPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/spaces/:id',
+      name: 'space-detail',
+      component: () => import('../pages/space/SpaceDetailPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/user/:id/followers',
       name: 'user-followers',
       component: () => import('../pages/user/UserFollowPage.vue'),

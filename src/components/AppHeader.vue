@@ -9,6 +9,7 @@ import {
   LogInOutline,
   LogOutOutline,
   NotificationsOutline,
+  PeopleOutline,
   PersonAddOutline,
   PersonCircleOutline,
 } from '@vicons/ionicons5'
@@ -30,6 +31,11 @@ const menuOptions = computed(() => [
     label: '上传图片',
     key: 'upload',
     icon: renderIcon(CloudUploadOutline),
+  },
+  {
+    label: '我的空间',
+    key: 'spaces',
+    icon: renderIcon(PeopleOutline),
   },
   {
     label: '消息通知',
@@ -69,6 +75,11 @@ async function goProtected(path: string) {
 async function handleMenuSelect(key: string | number) {
   if (key === 'upload') {
     await router.push('/upload')
+    return
+  }
+
+  if (key === 'spaces') {
+    await router.push('/spaces')
     return
   }
 
@@ -122,6 +133,17 @@ async function handleMenuSelect(key: string | number) {
             <n-icon :component="CloudUploadOutline" />
           </template>
           上传
+        </n-button>
+        <n-button
+          quaternary
+          class="nav-button"
+          :class="{ 'nav-button--active': isActive(['/spaces']) || route.path.startsWith('/spaces/') }"
+          @click="goProtected('/spaces')"
+        >
+          <template #icon>
+            <n-icon :component="PeopleOutline" />
+          </template>
+          空间
         </n-button>
       </nav>
 
