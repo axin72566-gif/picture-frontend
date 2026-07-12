@@ -1,6 +1,6 @@
 import type { UserVO } from './user'
 
-export type NotificationType = 'FOLLOW' | 'COMMENT' | 'REPLY'
+export type NotificationType = 'FOLLOW' | 'COMMENT' | 'REPLY' | 'LIKE'
 
 export interface NotificationVO {
   id: number

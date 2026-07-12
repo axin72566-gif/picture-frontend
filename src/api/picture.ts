@@ -1,6 +1,6 @@
 import type { AxiosProgressEvent } from 'axios'
 import request from './request'
-import type { BaseResponse } from '../types/user'
+import type { BaseResponse, UserVO } from '../types/user'
 import type {
   PageResult,
   PictureCommentAddRequest,
@@ -69,4 +69,22 @@ export function getPictureCommentReplies(rootId: number, params: PictureCommentP
 
 export function deletePictureComment(commentId: number) {
   return request.delete<BaseResponse<null>>(`/api/picture/comment/${commentId}`)
+}
+
+export function likePicture(id: number) {
+  return request.post<BaseResponse<null>>(`/api/picture/${id}/like`)
+}
+
+export function unlikePicture(id: number) {
+  return request.delete<BaseResponse<null>>(`/api/picture/${id}/like`)
+}
+
+export function getPictureLikeStatus(id: number) {
+  return request.get<BaseResponse<boolean>>(`/api/picture/${id}/like/status`)
+}
+
+export function getPictureLikers(id: number, params: { current?: number; pageSize?: number } = {}) {
+  return request.get<BaseResponse<PageResult<UserVO>>>(`/api/picture/${id}/likes`, {
+    params,
+  })
 }

@@ -4,6 +4,7 @@ const TYPE_LABELS: Record<NotificationType, string> = {
   FOLLOW: '关注了你',
   COMMENT: '评论了你的图片',
   REPLY: '回复了你的评论',
+  LIKE: '赞了你的图片',
 }
 
 export function getNotificationTypeLabel(type: NotificationType) {

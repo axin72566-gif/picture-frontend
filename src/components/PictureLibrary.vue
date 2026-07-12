@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import {
   CreateOutline,
+  Heart,
+  HeartOutline,
   ImageOutline,
   OpenOutline,
   PeopleOutline,
@@ -12,11 +14,20 @@ import {
   SearchOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
-import { deletePicture, getMyPicturePage, getPictureById, getPublicPicturePage, updatePicture } from '../api/picture'
+import {
+  deletePicture,
+  getMyPicturePage,
+  getPictureById,
+  getPublicPicturePage,
+  likePicture,
+  unlikePicture,
+  updatePicture,
+} from '../api/picture'
 import { followUser, getUserFollowStatus, unfollowUser } from '../api/user'
 import { useAuthStore } from '../stores/authStore'
 import type { PageResult, PictureSortField, PictureVO, SortOrder } from '../types/picture'
 import PictureCommentSection from './PictureCommentSection.vue'
+import PictureLikersModal from './PictureLikersModal.vue'
 import UserAvatar from './UserAvatar.vue'
 
 const props = withDefaults(
@@ -48,6 +59,8 @@ const detailFollowActionLoading = ref(false)
 const detailCreatorFollowing = ref(false)
 const detailFollowHovered = ref(false)
 let detailFollowStatusRequestId = 0
+const detailLikeActionLoading = ref(false)
+const likersModalVisible = ref(false)
 
 const query = reactive({
   current: 1,
@@ -92,6 +105,18 @@ const detailFollowLabel = computed(() => {
   if (!auth.isAuthenticated) return '登录后关注'
   if (detailCreatorFollowing.value) return detailFollowHovered.value ? '取消关注' : '已关注'
   return '关注'
+})
+const canLikeDetailPicture = computed(() => {
+  const picture = detailPicture.value
+  if (!picture) return false
+  const ownerId = picture.userId || picture.user?.id
+  return Boolean(ownerId && auth.user?.id !== ownerId)
+})
+const detailLiked = computed(() => Boolean(detailPicture.value?.liked))
+const detailLikeCount = computed(() => detailPicture.value?.likeCount ?? 0)
+const detailLikeLabel = computed(() => {
+  if (!auth.isAuthenticated) return '登录后点赞'
+  return detailLiked.value ? '取消点赞' : '点赞'
 })
 
 const sortFieldOptions = [
@@ -233,6 +258,8 @@ function closePictureDetail() {
   detailFollowLoading.value = false
   detailFollowActionLoading.value = false
   detailFollowHovered.value = false
+  detailLikeActionLoading.value = false
+  likersModalVisible.value = false
 }
 
 function parsePictureIdQuery() {
@@ -372,6 +399,67 @@ async function toggleDetailCreatorFollow() {
   }
 }
 
+function patchPictureLike(pictureId: number, liked: boolean, likeCount: number) {
+  function patchPicture(picture: PictureVO) {
+    if (picture.id !== pictureId) return picture
+    return {
+      ...picture,
+      liked,
+      likeCount,
+    }
+  }
+
+  if (detailPicture.value?.id === pictureId) {
+    detailPicture.value = patchPicture(detailPicture.value)
+  }
+
+  pageData.value.records = pageData.value.records.map(patchPicture)
+}
+
+async function toggleDetailLike() {
+  const picture = detailPicture.value
+  if (!picture || !canLikeDetailPicture.value) return
+
+  if (!auth.isAuthenticated) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+
+  const nextLiked = !Boolean(picture.liked)
+  const nextCount = Math.max(0, (picture.likeCount ?? 0) + (nextLiked ? 1 : -1))
+
+  detailLikeActionLoading.value = true
+  try {
+    if (nextLiked) {
+      await likePicture(picture.id)
+      patchPictureLike(picture.id, true, nextCount)
+      message.success('点赞成功')
+    } else {
+      await unlikePicture(picture.id)
+      patchPictureLike(picture.id, false, nextCount)
+      message.success('已取消点赞')
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '操作失败'
+    if (errorMessage.includes('已点赞')) {
+      patchPictureLike(picture.id, true, Math.max(picture.likeCount ?? 0, 1))
+      return
+    }
+    if (errorMessage.includes('未点赞')) {
+      patchPictureLike(picture.id, false, Math.max(0, (picture.likeCount ?? 1) - 1))
+      return
+    }
+    message.error(errorMessage)
+  } finally {
+    detailLikeActionLoading.value = false
+  }
+}
+
+function openLikersModal() {
+  if (!detailPicture.value) return
+  likersModalVisible.value = true
+}
+
 function formatDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -505,6 +593,10 @@ onMounted(() => {
 
               <div class="meta-row">
                 <span>{{ formatDate(picture.createTime) }}</span>
+                <span class="like-count-meta">
+                  <n-icon :component="HeartOutline" />
+                  {{ picture.likeCount ?? 0 }}
+                </span>
               </div>
 
               <button class="creator-row" type="button" @click="goToCreatorProfile(picture)">
@@ -617,6 +709,27 @@ onMounted(() => {
             </n-button>
           </div>
 
+          <div class="detail-like-row">
+            <n-button
+              v-if="canLikeDetailPicture"
+              size="small"
+              :type="detailLiked ? 'error' : 'default'"
+              :ghost="detailLiked"
+              :loading="detailLikeActionLoading"
+              :title="detailLikeLabel"
+              @click="toggleDetailLike"
+            >
+              <template #icon>
+                <n-icon :component="detailLiked ? Heart : HeartOutline" />
+              </template>
+              {{ detailLikeLabel }}
+            </n-button>
+            <button class="like-count-button" type="button" title="查看点赞用户" @click="openLikersModal">
+              <n-icon :component="HeartOutline" />
+              <span>{{ detailLikeCount }} 人点赞</span>
+            </button>
+          </div>
+
           <n-descriptions :column="1" bordered label-placement="left" size="small">
             <n-descriptions-item label="上传时间">
               {{ formatDate(detailPicture.createTime) }}
@@ -649,6 +762,11 @@ onMounted(() => {
         </div>
       </div>
     </n-modal>
+
+    <PictureLikersModal
+      v-model:show="likersModalVisible"
+      :picture-id="detailPicture?.id ?? null"
+    />
   </div>
 </template>
 
@@ -801,6 +919,49 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.like-count-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.like-count-meta .n-icon {
+  width: 14px;
+  height: 14px;
+  color: #ef4444;
+}
+
+.detail-like-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.like-count-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.like-count-button:hover {
+  color: #ef4444;
+}
+
+.like-count-button .n-icon {
+  width: 16px;
+  height: 16px;
+  color: #ef4444;
 }
 
 .creator-row {

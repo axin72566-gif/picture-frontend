@@ -12,6 +12,8 @@ export interface PictureVO {
   format: string
   userId: number
   user: UserVO | null
+  likeCount?: number
+  liked?: boolean
   createTime: string
 }
 

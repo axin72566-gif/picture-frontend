@@ -45,6 +45,9 @@ function isPublicApi(config?: InternalAxiosRequestConfig) {
 
   if (url.includes('/api/user/register') || url.includes('/api/user/login')) return true
   if (/\/api\/picture\/page(\?|$)/.test(url)) return true
+  // GET /api/picture/{数字 id}/likes、/like/status（须先于纯 id 匹配）
+  if (/\/api\/picture\/\d+\/likes(\?|$)/.test(url)) return true
+  if (/\/api\/picture\/\d+\/like\/status(\?|$)/.test(url)) return true
   // GET /api/picture/{数字 id}，排除 /page、/my/page、/upload 等
   if (/\/api\/picture\/\d+(\?|$)/.test(url)) return true
   if (/\/api\/user\/\d+\/followers(\?|$)/.test(url)) return true
@@ -56,9 +59,19 @@ function isPublicApi(config?: InternalAxiosRequestConfig) {
   return false
 }
 
-function shouldAttachAuth(config?: InternalAxiosRequestConfig) {
+/** 公开但可选登录：有 token 时附带，便于后端填充关注态 / 点赞态 */
+function isOptionalAuthApi(config?: InternalAxiosRequestConfig) {
   const url = getRequestUrl(config)
-  return !isPublicApi(config) || /\/api\/user\/\d+\/follow\/status(\?|$)/.test(url)
+  if (!url) return false
+  if (/\/api\/user\/\d+\/follow\/status(\?|$)/.test(url)) return true
+  if (/\/api\/picture\/page(\?|$)/.test(url)) return true
+  if (/\/api\/picture\/\d+\/like\/status(\?|$)/.test(url)) return true
+  if (/\/api\/picture\/\d+(\?|$)/.test(url)) return true
+  return false
+}
+
+function shouldAttachAuth(config?: InternalAxiosRequestConfig) {
+  return !isPublicApi(config) || isOptionalAuthApi(config)
 }
 
 function getBearerToken(config?: InternalAxiosRequestConfig) {
