@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stomp/stompjs": "^7.3.0",
     "@vicons/ionicons5": "^0.13.0",
     "axios": "^1.18.1",
     "naive-ui": "^2.42.0",

@@ -11,6 +11,7 @@ import type {
   SpaceUpdateRequest,
   SpaceVO,
 } from '../types/space'
+import type { SpaceMessageAddRequest, SpaceMessageVO } from '../types/spaceMessage'
 
 function cleanParams(params: SpacePageRequest | PicturePageRequest) {
   return Object.fromEntries(
@@ -90,4 +91,18 @@ export function rejectSpaceInvite(inviteId: number) {
 
 export function cancelSpaceInvite(inviteId: number) {
   return request.delete<BaseResponse<null>>(`/api/space/invites/${inviteId}`)
+}
+
+export function getSpaceMessages(spaceId: number, params: SpacePageRequest = {}) {
+  return request.get<BaseResponse<PageResponse<SpaceMessageVO>>>(`/api/space/${spaceId}/messages`, {
+    params: cleanParams(params),
+  })
+}
+
+export function sendSpaceMessage(spaceId: number, data: SpaceMessageAddRequest) {
+  return request.post<BaseResponse<SpaceMessageVO>>(`/api/space/${spaceId}/messages`, data)
+}
+
+export function deleteSpaceMessage(spaceId: number, messageId: number) {
+  return request.delete<BaseResponse<null>>(`/api/space/${spaceId}/messages/${messageId}`)
 }

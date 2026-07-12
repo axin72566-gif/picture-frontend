@@ -24,6 +24,7 @@ import {
   updateSpaceMemberRole,
 } from '../../api/space'
 import PictureLibrary from '../../components/PictureLibrary.vue'
+import SpaceChatSection from '../../components/SpaceChatSection.vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
 import type { PageResponse } from '../../types/user'
@@ -45,7 +46,7 @@ const actingMemberId = ref<number | null>(null)
 const actingInviteId = ref<number | null>(null)
 const showEditModal = ref(false)
 const showInviteModal = ref(false)
-const activeTab = ref<'pictures' | 'members' | 'invites'>('pictures')
+const activeTab = ref<'pictures' | 'chat' | 'members' | 'invites'>('pictures')
 
 const space = ref<SpaceVO | null>(null)
 const loadError = ref('')
@@ -458,6 +459,14 @@ watch(activeTab, (tab) => {
                 :my-role="space.myRole"
                 title="空间图片"
                 subtitle="成员可见；编辑者可上传与修改信息，创建者可删除"
+              />
+            </n-tab-pane>
+
+            <n-tab-pane name="chat" tab="群聊">
+              <SpaceChatSection
+                v-if="activeTab === 'chat'"
+                :space-id="space.id"
+                :my-role="space.myRole || ''"
               />
             </n-tab-pane>
 

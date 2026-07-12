@@ -22,3 +22,13 @@ export function canEditSpacePicture(role: SpaceRole | string | null | undefined)
 export function canDeleteSpacePicture(role: SpaceRole | string | null | undefined) {
   return role === 'CREATOR'
 }
+
+export function canDeleteSpaceMessage(
+  role: SpaceRole | string | null | undefined,
+  senderId: number | null | undefined,
+  currentUserId: number | null | undefined,
+) {
+  if (!currentUserId) return false
+  if (senderId != null && currentUserId === senderId) return true
+  return role === 'CREATOR'
+}
