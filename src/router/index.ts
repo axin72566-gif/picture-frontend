@@ -30,6 +30,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('../pages/notification/NotificationPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/user/:id/followers',
       name: 'user-followers',
       component: () => import('../pages/user/UserFollowPage.vue'),

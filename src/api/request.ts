@@ -45,6 +45,8 @@ function isPublicApi(config?: InternalAxiosRequestConfig) {
 
   if (url.includes('/api/user/register') || url.includes('/api/user/login')) return true
   if (/\/api\/picture\/page(\?|$)/.test(url)) return true
+  // GET /api/picture/{数字 id}，排除 /page、/my/page、/upload 等
+  if (/\/api\/picture\/\d+(\?|$)/.test(url)) return true
   if (/\/api\/user\/\d+\/followers(\?|$)/.test(url)) return true
   if (/\/api\/user\/\d+\/following(\?|$)/.test(url)) return true
   if (/\/api\/user\/\d+\/follow\/status(\?|$)/.test(url)) return true

@@ -12,7 +12,7 @@ import {
   SearchOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
-import { deletePicture, getMyPicturePage, getPublicPicturePage, updatePicture } from '../api/picture'
+import { deletePicture, getMyPicturePage, getPictureById, getPublicPicturePage, updatePicture } from '../api/picture'
 import { followUser, getUserFollowStatus, unfollowUser } from '../api/user'
 import { useAuthStore } from '../stores/authStore'
 import type { PageResult, PictureSortField, PictureVO, SortOrder } from '../types/picture'
@@ -235,6 +235,36 @@ function closePictureDetail() {
   detailFollowHovered.value = false
 }
 
+function parsePictureIdQuery() {
+  const raw = route.query.pictureId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (!value) return null
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
+async function openPictureFromQuery() {
+  if (props.mode !== 'public') return
+  const pictureId = parsePictureIdQuery()
+  if (pictureId == null) return
+
+  try {
+    const response = await getPictureById(pictureId)
+    const picture = response.data.data
+    if (!picture) {
+      throw new Error(response.data.message || '图片不存在')
+    }
+    showPictureDetail(picture)
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '图片加载失败'
+    message.error(errorMessage)
+  } finally {
+    const nextQuery = { ...route.query }
+    delete nextQuery.pictureId
+    await router.replace({ path: route.path, query: nextQuery })
+  }
+}
+
 function openImage(url?: string) {
   if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
@@ -369,8 +399,16 @@ watch(
   },
 )
 
+watch(
+  () => route.query.pictureId,
+  () => {
+    void openPictureFromQuery()
+  },
+)
+
 onMounted(() => {
   void fetchPictures()
+  void openPictureFromQuery()
 })
 </script>
 

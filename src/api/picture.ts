@@ -33,6 +33,10 @@ export function getPublicPicturePage(params: PicturePageRequest) {
   })
 }
 
+export function getPictureById(id: number) {
+  return request.get<BaseResponse<PictureVO>>(`/api/picture/${id}`)
+}
+
 export function getMyPicturePage(params: PicturePageRequest) {
   return request.get<BaseResponse<PageResult<PictureVO>>>('/api/picture/my/page', {
     params: cleanParams(params),

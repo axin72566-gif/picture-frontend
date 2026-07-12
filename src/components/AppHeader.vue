@@ -8,11 +8,13 @@ import {
   ImagesOutline,
   LogInOutline,
   LogOutOutline,
+  NotificationsOutline,
   PersonAddOutline,
   PersonCircleOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/authStore'
 import UserAvatar from './UserAvatar.vue'
+import NotificationBell from './NotificationBell.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -28,6 +30,11 @@ const menuOptions = computed(() => [
     label: '上传图片',
     key: 'upload',
     icon: renderIcon(CloudUploadOutline),
+  },
+  {
+    label: '消息通知',
+    key: 'notifications',
+    icon: renderIcon(NotificationsOutline),
   },
   {
     label: '个人资料',
@@ -62,6 +69,11 @@ async function goProtected(path: string) {
 async function handleMenuSelect(key: string | number) {
   if (key === 'upload') {
     await router.push('/upload')
+    return
+  }
+
+  if (key === 'notifications') {
+    await router.push('/notifications')
     return
   }
 
@@ -113,17 +125,15 @@ async function handleMenuSelect(key: string | number) {
         </n-button>
       </nav>
 
-      <n-dropdown
-        v-if="auth.isAuthenticated"
-        trigger="click"
-        :options="menuOptions"
-        @select="handleMenuSelect"
-      >
-        <button class="user-trigger" type="button">
-          <UserAvatar :key="auth.avatarKey" :size="34" :src="auth.avatarDisplayUrl" :text="avatarText" />
-          <span class="user-name">{{ auth.displayName }}</span>
-        </button>
-      </n-dropdown>
+      <div v-if="auth.isAuthenticated" class="header-actions">
+        <NotificationBell />
+        <n-dropdown trigger="click" :options="menuOptions" @select="handleMenuSelect">
+          <button class="user-trigger" type="button">
+            <UserAvatar :key="auth.avatarKey" :size="34" :src="auth.avatarDisplayUrl" :text="avatarText" />
+            <span class="user-name">{{ auth.displayName }}</span>
+          </button>
+        </n-dropdown>
+      </div>
 
       <div v-else class="guest-actions">
         <n-button quaternary @click="router.push('/login')">
@@ -197,7 +207,8 @@ async function handleMenuSelect(key: string | number) {
 }
 
 .header-nav,
-.guest-actions {
+.guest-actions,
+.header-actions {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -205,6 +216,11 @@ async function handleMenuSelect(key: string | number) {
 
 .header-nav {
   min-width: 0;
+}
+
+.header-actions {
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .guest-actions {
