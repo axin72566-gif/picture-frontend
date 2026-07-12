@@ -18,12 +18,20 @@ function cleanParams(params: PicturePageRequest) {
   )
 }
 
-export function uploadPicture(file: File, onUploadProgress?: (event: AxiosProgressEvent) => void) {
+export interface UploadPictureOptions {
+  spaceId?: number | null
+  onUploadProgress?: (event: AxiosProgressEvent) => void
+}
+
+export function uploadPicture(file: File, options: UploadPictureOptions = {}) {
   const formData = new FormData()
   formData.append('file', file)
+  if (options.spaceId != null && options.spaceId > 0) {
+    formData.append('spaceId', String(options.spaceId))
+  }
 
   return request.post<BaseResponse<PictureUploadResult>>('/api/picture/upload', formData, {
-    onUploadProgress,
+    onUploadProgress: options.onUploadProgress,
   })
 }
 

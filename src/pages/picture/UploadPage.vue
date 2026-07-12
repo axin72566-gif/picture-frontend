@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import {
   CheckmarkCircleOutline,
@@ -9,12 +9,16 @@ import {
   TrashOutline,
 } from '@vicons/ionicons5'
 import { updatePicture, uploadPicture } from '../../api/picture'
+import { getSpace } from '../../api/space'
 import type { PictureUploadResult } from '../../types/picture'
+import type { SpaceVO } from '../../types/space'
+import { canUploadToSpace } from '../../utils/space'
 import UserAvatar from '../../components/UserAvatar.vue'
 
 const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 const maxFileSize = 10 * 1024 * 1024
 
+const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -27,7 +31,21 @@ const progress = ref(0)
 const dragActive = ref(false)
 const editName = ref('')
 const editDescription = ref('')
+const targetSpace = ref<SpaceVO | null>(null)
+const spaceContextLoading = ref(false)
+let spaceResolveSeq = 0
 
+const targetSpaceId = computed(() => {
+  const raw = route.query.spaceId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (!value) return null
+  const id = Number(value)
+  return Number.isFinite(id) && id > 0 ? id : null
+})
+
+const pageTitle = computed(() =>
+  targetSpace.value ? `上传到空间：${targetSpace.value.name}` : '上传图片',
+)
 const fileSizeText = computed(() => {
   if (!selectedFile.value) return ''
   return formatFileSize(selectedFile.value.size)
@@ -68,6 +86,60 @@ function formatDate(value?: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+async function resolveSpaceContext() {
+  const spaceId = targetSpaceId.value
+  if (spaceId == null) {
+    targetSpace.value = null
+    spaceContextLoading.value = false
+    return false
+  }
+
+  // 已就绪则直接复用，避免并发请求把 targetSpace 清掉
+  if (targetSpace.value?.id === spaceId) {
+    return true
+  }
+
+  const seq = ++spaceResolveSeq
+  spaceContextLoading.value = true
+  try {
+    const response = await getSpace(spaceId)
+    if (seq !== spaceResolveSeq) return false
+
+    const space = response.data.data
+    if (!space) {
+      throw new Error(response.data.message || '空间不存在')
+    }
+    if (!canUploadToSpace(space.myRole)) {
+      message.warning('当前角色无权向该空间上传图片')
+      await router.replace(`/spaces/${space.id}`)
+      return false
+    }
+    targetSpace.value = space
+    return true
+  } catch (error) {
+    if (seq !== spaceResolveSeq) return false
+    targetSpace.value = null
+    const errorMessage = error instanceof Error && error.message ? error.message : '无法加载空间信息'
+    message.error(errorMessage)
+    if (targetSpaceId.value != null) {
+      await router.replace(`/spaces/${targetSpaceId.value}`)
+    } else {
+      await router.replace('/spaces')
+    }
+    return false
+  } finally {
+    if (seq === spaceResolveSeq) {
+      spaceContextLoading.value = false
+    }
+  }
+}
+
+async function ensureSpaceReadyForUpload() {
+  if (targetSpaceId.value == null) return true
+  if (targetSpace.value?.id === targetSpaceId.value) return true
+  return resolveSpaceContext()
 }
 
 function chooseFile() {
@@ -132,14 +204,22 @@ async function submitUpload() {
     message.warning('请先选择一张图片')
     return
   }
+  const spaceReady = await ensureSpaceReadyForUpload()
+  if (!spaceReady) {
+    message.warning('空间信息未就绪，请稍后重试')
+    return
+  }
 
   uploading.value = true
   progress.value = 0
   try {
-    const response = await uploadPicture(selectedFile.value, (event) => {
-      if (event.total) {
-        progress.value = Math.round((event.loaded / event.total) * 100)
-      }
+    const response = await uploadPicture(selectedFile.value, {
+      spaceId: targetSpaceId.value,
+      onUploadProgress: (event) => {
+        if (event.total) {
+          progress.value = Math.round((event.loaded / event.total) * 100)
+        }
+      },
     })
     const uploaded = response.data.data
     if (!uploaded) {
@@ -150,6 +230,9 @@ async function submitUpload() {
     editDescription.value = uploaded.description ?? ''
     progress.value = 100
     message.success('图片上传成功')
+    if (targetSpaceId.value != null) {
+      await router.push(`/spaces/${targetSpaceId.value}`)
+    }
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '图片上传失败'
     message.error(errorMessage)
@@ -191,6 +274,14 @@ async function submitPictureInfo() {
   }
 }
 
+watch(
+  targetSpaceId,
+  () => {
+    void resolveSpaceContext()
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => {
   revokePreviewUrl()
 })
@@ -200,9 +291,14 @@ onBeforeUnmount(() => {
   <div class="upload-page">
     <section class="page-width upload-hero">
       <div>
-        <h1>上传图片</h1>
+        <h1>{{ pageTitle }}</h1>
+        <p v-if="targetSpace" class="hero-subtitle">
+          将上传到空间「{{ targetSpace.name }}」，需编辑者或创建者权限
+        </p>
       </div>
     </section>
+
+    <n-spin :show="spaceContextLoading">
 
     <section class="page-width upload-layout">
       <div class="upload-panel">
@@ -218,6 +314,7 @@ onBeforeUnmount(() => {
           class="drop-zone"
           :class="{ 'drop-zone--active': dragActive }"
           type="button"
+          :disabled="spaceContextLoading"
           @click="chooseFile"
           @dragover.prevent="dragActive = true"
           @dragleave.prevent="dragActive = false"
@@ -342,6 +439,7 @@ onBeforeUnmount(() => {
         </div>
       </aside>
     </section>
+    </n-spin>
   </div>
 </template>
 
@@ -369,6 +467,12 @@ h1 {
   color: #111827;
   font-size: clamp(28px, 4vw, 42px);
   line-height: 1.18;
+}
+
+.hero-subtitle {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 14px;
 }
 
 .upload-layout {

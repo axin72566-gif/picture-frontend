@@ -23,22 +23,33 @@ import {
   unlikePicture,
   updatePicture,
 } from '../api/picture'
+import { getSpacePicturePage } from '../api/space'
 import { followUser, getUserFollowStatus, unfollowUser } from '../api/user'
 import { useAuthStore } from '../stores/authStore'
 import type { PageResult, PictureSortField, PictureVO, SortOrder } from '../types/picture'
+import type { SpaceRole } from '../types/space'
+import {
+  canDeleteSpacePicture,
+  canEditSpacePicture,
+  canUploadToSpace,
+} from '../utils/space'
 import PictureCommentSection from './PictureCommentSection.vue'
 import PictureLikersModal from './PictureLikersModal.vue'
 import UserAvatar from './UserAvatar.vue'
 
 const props = withDefaults(
   defineProps<{
-    mode: 'public' | 'mine'
+    mode: 'public' | 'mine' | 'space'
     title: string
     subtitle: string
     embedded?: boolean
+    spaceId?: number | null
+    myRole?: SpaceRole | null
   }>(),
   {
     embedded: false,
+    spaceId: null,
+    myRole: null,
   },
 )
 
@@ -82,6 +93,22 @@ const pageData = ref<PageResult<PictureVO>>({
 })
 
 const isMine = computed(() => props.mode === 'mine')
+const isSpace = computed(() => props.mode === 'space')
+const canUploadHere = computed(() => {
+  if (isSpace.value) return canUploadToSpace(props.myRole)
+  return auth.isAuthenticated
+})
+const uploadTargetPath = computed(() => {
+  if (isSpace.value && props.spaceId) {
+    return { path: '/upload', query: { spaceId: String(props.spaceId) } }
+  }
+  return { path: '/upload' }
+})
+const emptyHint = computed(() => {
+  if (isSpace.value) return '空间里还没有图片，有编辑权限的成员可以上传。'
+  if (isMine.value) return '上传第一张图片后，它会出现在这里。'
+  return '当前还没有公开图片，稍后再来看看。'
+})
 const records = computed(() => pageData.value.records)
 const rootClass = computed(() => ({ 'library-page--embedded': props.embedded }))
 const sectionClass = computed(() => (props.embedded ? 'library-section' : 'page-width'))
@@ -146,10 +173,17 @@ function buildParams() {
 async function fetchPictures() {
   loading.value = true
   try {
-    const response =
-      props.mode === 'mine'
-        ? await getMyPicturePage(buildParams())
-        : await getPublicPicturePage(buildParams())
+    let response
+    if (props.mode === 'mine') {
+      response = await getMyPicturePage(buildParams())
+    } else if (props.mode === 'space') {
+      if (props.spaceId == null || props.spaceId <= 0) {
+        throw new Error('无效的空间')
+      }
+      response = await getSpacePicturePage(props.spaceId, buildParams())
+    } else {
+      response = await getPublicPicturePage(buildParams())
+    }
     const nextPage = response.data.data
     if (!nextPage) {
       throw new Error(response.data.message || '图片加载失败')
@@ -161,6 +195,35 @@ async function fetchPictures() {
   } finally {
     loading.value = false
   }
+}
+
+function canEditPicture(picture: PictureVO) {
+  if (props.mode === 'space') {
+    return canEditSpacePicture(props.myRole)
+  }
+  if (props.mode === 'mine') {
+    return picture.spaceId == null
+  }
+  return false
+}
+
+function canDeletePicture(picture: PictureVO) {
+  if (props.mode === 'space') {
+    return canDeleteSpacePicture(props.myRole)
+  }
+  if (props.mode === 'mine') {
+    return picture.spaceId == null
+  }
+  return false
+}
+
+function showPictureActions(picture: PictureVO) {
+  return canEditPicture(picture) || canDeletePicture(picture)
+}
+
+function goToPictureSpace(picture: PictureVO) {
+  if (picture.spaceId == null) return
+  void router.push(`/spaces/${picture.spaceId}`)
 }
 
 function handleSearch() {
@@ -271,7 +334,6 @@ function parsePictureIdQuery() {
 }
 
 async function openPictureFromQuery() {
-  if (props.mode !== 'public') return
   const pictureId = parsePictureIdQuery()
   if (pictureId == null) return
 
@@ -281,11 +343,24 @@ async function openPictureFromQuery() {
     if (!picture) {
       throw new Error(response.data.message || '图片不存在')
     }
+
+    if (picture.spaceId != null) {
+      const onThisSpace = props.mode === 'space' && props.spaceId === picture.spaceId
+      if (!onThisSpace) {
+        await router.replace({
+          path: `/spaces/${picture.spaceId}`,
+          query: { pictureId: String(picture.id) },
+        })
+        return
+      }
+    }
+
     showPictureDetail(picture)
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '图片加载失败'
     message.error(errorMessage)
   } finally {
+    if (parsePictureIdQuery() == null) return
     const nextQuery = { ...route.query }
     delete nextQuery.pictureId
     await router.replace({ path: route.path, query: nextQuery })
@@ -480,7 +555,7 @@ function formatFileSize(size: number) {
 }
 
 watch(
-  () => props.mode,
+  () => [props.mode, props.spaceId] as const,
   () => {
     query.current = 1
     void fetchPictures()
@@ -599,6 +674,18 @@ onMounted(() => {
                 </span>
               </div>
 
+              <div v-if="isMine && picture.spaceId != null" class="space-badge-row">
+                <n-tag
+                  size="small"
+                  type="info"
+                  :bordered="false"
+                  style="cursor: pointer"
+                  @click="goToPictureSpace(picture)"
+                >
+                  空间 #{{ picture.spaceId }}
+                </n-tag>
+              </div>
+
               <button class="creator-row" type="button" @click="goToCreatorProfile(picture)">
                 <UserAvatar
                   :size="26"
@@ -608,8 +695,8 @@ onMounted(() => {
                 <span :title="getCreatorName(picture)">{{ getCreatorName(picture) }}</span>
               </button>
 
-              <div v-if="isMine" class="card-actions">
-                <n-tooltip trigger="hover">
+              <div v-if="showPictureActions(picture)" class="card-actions">
+                <n-tooltip v-if="canEditPicture(picture)" trigger="hover">
                   <template #trigger>
                     <n-button circle quaternary @click="startEdit(picture)">
                       <template #icon>
@@ -620,6 +707,7 @@ onMounted(() => {
                   编辑信息
                 </n-tooltip>
                 <n-popconfirm
+                  v-if="canDeletePicture(picture)"
                   positive-text="删除"
                   negative-text="取消"
                   @positive-click="handleDelete(picture)"
@@ -641,8 +729,14 @@ onMounted(() => {
         <div v-else class="empty-state">
           <n-icon :component="ImageOutline" />
           <h2>暂无图片</h2>
-          <p>{{ isMine ? '上传第一张图片后，它会出现在这里。' : '当前还没有公开图片，稍后再来看看。' }}</p>
-          <n-button v-if="auth.isAuthenticated" type="primary" @click="router.push('/upload')">上传图片</n-button>
+          <p>{{ emptyHint }}</p>
+          <n-button
+            v-if="canUploadHere"
+            type="primary"
+            @click="router.push(uploadTargetPath)"
+          >
+            上传图片
+          </n-button>
         </div>
       </n-spin>
     </section>
@@ -843,6 +937,14 @@ h1 {
   background: #fff;
 }
 
+.library-page--embedded .filter-bar {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.library-page--embedded .filter-bar .n-button {
+  width: 100%;
+}
+
 .picture-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -928,6 +1030,10 @@ h1 {
   flex-shrink: 0;
   color: #6b7280;
   font-size: 12px;
+}
+
+.space-badge-row {
+  display: flex;
 }
 
 .like-count-meta .n-icon {

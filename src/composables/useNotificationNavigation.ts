@@ -1,5 +1,6 @@
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
+import { getPictureById } from '../api/picture'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import type { NotificationVO } from '../types/notification'
@@ -32,6 +33,19 @@ export function useNotificationNavigation() {
     }
 
     if ((item.type === 'COMMENT' || item.type === 'REPLY' || item.type === 'LIKE') && item.pictureId) {
+      try {
+        const response = await getPictureById(item.pictureId)
+        const picture = response.data.data
+        if (picture?.spaceId != null) {
+          await router.push({
+            path: `/spaces/${picture.spaceId}`,
+            query: { pictureId: String(item.pictureId) },
+          })
+          return
+        }
+      } catch {
+        // 回退到公开图库深链
+      }
       await router.push({ path: '/', query: { pictureId: String(item.pictureId) } })
       return
     }

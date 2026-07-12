@@ -11,6 +11,8 @@ export interface PictureVO {
   contentType: string
   format: string
   userId: number
+  /** 所属空间 ID；null 表示个人图 */
+  spaceId: number | null
   user: UserVO | null
   likeCount?: number
   liked?: boolean

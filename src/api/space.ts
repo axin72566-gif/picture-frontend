@@ -1,4 +1,5 @@
 import request from './request'
+import type { PageResult, PicturePageRequest, PictureVO } from '../types/picture'
 import type { BaseResponse, PageResponse } from '../types/user'
 import type {
   SpaceCreateRequest,
@@ -11,7 +12,7 @@ import type {
   SpaceVO,
 } from '../types/space'
 
-function cleanParams(params: SpacePageRequest) {
+function cleanParams(params: SpacePageRequest | PicturePageRequest) {
   return Object.fromEntries(
     Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined),
   )
@@ -41,6 +42,12 @@ export function dissolveSpace(id: number) {
 
 export function getSpaceMembers(id: number, params: SpacePageRequest = {}) {
   return request.get<BaseResponse<PageResponse<SpaceMemberVO>>>(`/api/space/${id}/members`, {
+    params: cleanParams(params),
+  })
+}
+
+export function getSpacePicturePage(spaceId: number, params: PicturePageRequest = {}) {
+  return request.get<BaseResponse<PageResult<PictureVO>>>(`/api/space/${spaceId}/pictures`, {
     params: cleanParams(params),
   })
 }

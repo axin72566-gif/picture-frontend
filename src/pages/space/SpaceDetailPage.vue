@@ -9,6 +9,7 @@ import {
   TrashOutline,
   ExitOutline,
   PersonAddOutline,
+  CloudUploadOutline,
 } from '@vicons/ionicons5'
 import {
   cancelSpaceInvite,
@@ -22,11 +23,12 @@ import {
   updateSpace,
   updateSpaceMemberRole,
 } from '../../api/space'
+import PictureLibrary from '../../components/PictureLibrary.vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
 import type { PageResponse } from '../../types/user'
 import type { SpaceInviteVO, SpaceMemberVO, SpaceVO } from '../../types/space'
-import { getSpaceRoleLabel } from '../../utils/space'
+import { canUploadToSpace, getSpaceRoleLabel } from '../../utils/space'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,7 +45,7 @@ const actingMemberId = ref<number | null>(null)
 const actingInviteId = ref<number | null>(null)
 const showEditModal = ref(false)
 const showInviteModal = ref(false)
-const activeTab = ref<'members' | 'invites'>('members')
+const activeTab = ref<'pictures' | 'members' | 'invites'>('pictures')
 
 const space = ref<SpaceVO | null>(null)
 const loadError = ref('')
@@ -87,6 +89,12 @@ const spaceId = computed(() => {
 })
 
 const isCreator = computed(() => space.value?.myRole === 'CREATOR')
+const canUpload = computed(() => canUploadToSpace(space.value?.myRole))
+
+function goUploadToSpace() {
+  if (spaceId.value == null) return
+  void router.push({ path: '/upload', query: { spaceId: String(spaceId.value) } })
+}
 
 const roleOptions = [
   { label: '编辑者', value: 'EDITOR' },
@@ -356,7 +364,7 @@ function goToUser(userId?: number | null) {
 watch(
   spaceId,
   async () => {
-    activeTab.value = 'members'
+    activeTab.value = 'pictures'
     memberQuery.current = 1
     inviteQuery.current = 1
     await fetchSpace()
@@ -406,6 +414,12 @@ watch(activeTab, (tab) => {
               </n-tag>
             </div>
             <div class="detail-heading__actions">
+              <n-button v-if="canUpload" type="primary" @click="goUploadToSpace">
+                <template #icon>
+                  <n-icon :component="CloudUploadOutline" />
+                </template>
+                上传到空间
+              </n-button>
               <template v-if="isCreator">
                 <n-button @click="openInviteModal">
                   <template #icon>
@@ -436,6 +450,17 @@ watch(activeTab, (tab) => {
           </div>
 
           <n-tabs v-model:value="activeTab" type="segment" animated>
+            <n-tab-pane name="pictures" tab="图片">
+              <PictureLibrary
+                mode="space"
+                embedded
+                :space-id="space.id"
+                :my-role="space.myRole"
+                title="空间图片"
+                subtitle="成员可见；编辑者可上传与修改信息，创建者可删除"
+              />
+            </n-tab-pane>
+
             <n-tab-pane name="members" tab="成员">
               <n-spin :show="membersLoading">
                 <div v-if="memberPage.records.length === 0" class="tab-empty">暂无成员</div>
@@ -607,7 +632,7 @@ watch(activeTab, (tab) => {
 }
 
 .page-width {
-  width: min(880px, calc(100% - 32px));
+  width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
 }
 
@@ -616,6 +641,7 @@ watch(activeTab, (tab) => {
   border-radius: 8px;
   background: #fff;
   padding: 24px;
+  overflow: visible;
 }
 
 .panel-toolbar {
