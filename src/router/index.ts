@@ -92,6 +92,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin',
+      name: 'admin-moderation',
+      component: () => import('../pages/admin/AdminModerationPage.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },
@@ -106,6 +112,10 @@ router.beforeEach((to) => {
       path: '/login',
       query: to.fullPath === '/' ? undefined : { redirect: to.fullPath },
     }
+  }
+
+  if (to.meta.requiresAdmin && auth.user?.userRole !== 'admin') {
+    return '/'
   }
 
   if (publicAuthRoutes.has(to.path) && auth.isAuthenticated) {

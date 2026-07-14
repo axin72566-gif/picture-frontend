@@ -13,6 +13,7 @@ import {
   PeopleOutline,
   PersonAddOutline,
   PersonCircleOutline,
+  ShieldCheckmarkOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
@@ -29,42 +30,54 @@ function renderIcon(icon: Component) {
   return () => h(NIcon, null, { default: () => h(icon) })
 }
 
-const menuOptions = computed(() => [
-  {
-    label: '上传图片',
-    key: 'upload',
-    icon: renderIcon(CloudUploadOutline),
-  },
-  {
-    label: '我的空间',
-    key: 'spaces',
-    icon: renderIcon(PeopleOutline),
-  },
-  {
-    label: '消息',
-    key: 'messages',
-    icon: renderIcon(ChatbubbleOutline),
-  },
-  {
-    label: '消息通知',
-    key: 'notifications',
-    icon: renderIcon(NotificationsOutline),
-  },
-  {
-    label: '个人资料',
-    key: 'profile',
-    icon: renderIcon(PersonCircleOutline),
-  },
-  {
-    type: 'divider' as const,
-    key: 'divider',
-  },
-  {
-    label: '退出登录',
-    key: 'logout',
-    icon: renderIcon(LogOutOutline),
-  },
-])
+const menuOptions = computed(() => {
+  const items: Array<Record<string, unknown>> = [
+    {
+      label: '上传图片',
+      key: 'upload',
+      icon: renderIcon(CloudUploadOutline),
+    },
+    {
+      label: '我的空间',
+      key: 'spaces',
+      icon: renderIcon(PeopleOutline),
+    },
+    {
+      label: '消息',
+      key: 'messages',
+      icon: renderIcon(ChatbubbleOutline),
+    },
+    {
+      label: '消息通知',
+      key: 'notifications',
+      icon: renderIcon(NotificationsOutline),
+    },
+    {
+      label: '个人资料',
+      key: 'profile',
+      icon: renderIcon(PersonCircleOutline),
+    },
+  ]
+  if (auth.user?.userRole === 'admin') {
+    items.push({
+      label: '聊天治理',
+      key: 'admin',
+      icon: renderIcon(ShieldCheckmarkOutline),
+    })
+  }
+  items.push(
+    {
+      type: 'divider',
+      key: 'divider',
+    },
+    {
+      label: '退出登录',
+      key: 'logout',
+      icon: renderIcon(LogOutOutline),
+    },
+  )
+  return items
+})
 
 const avatarText = computed(() => auth.displayName.slice(0, 1).toUpperCase())
 const chatUnread = computed(() => chatStore.unreadTotal)
@@ -104,6 +117,11 @@ async function handleMenuSelect(key: string | number) {
 
   if (key === 'profile') {
     await router.push('/profile')
+    return
+  }
+
+  if (key === 'admin') {
+    await router.push('/admin')
     return
   }
 
