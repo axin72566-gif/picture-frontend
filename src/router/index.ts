@@ -36,6 +36,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/messages',
+      name: 'messages',
+      component: () => import('../pages/chat/ChatListPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/messages/:id',
+      name: 'message-room',
+      component: () => import('../pages/chat/ChatRoomPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/spaces',
       name: 'spaces',
       component: () => import('../pages/space/SpaceListPage.vue'),

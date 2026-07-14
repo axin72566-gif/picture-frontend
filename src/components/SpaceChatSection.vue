@@ -1,54 +1,35 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import { ChatbubbleOutline, TrashOutline } from '@vicons/ionicons5'
-import {
-  deleteSpaceMessage,
-  getSpaceMessages,
-  sendSpaceMessage,
-} from '../api/space'
-import { useSpaceChat } from '../composables/useSpaceChat'
+import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
-import type { SpaceMessageVO } from '../types/spaceMessage'
+import type { ChatMessageVO } from '../types/chat'
 import { canDeleteSpaceMessage } from '../utils/space'
 import UserAvatar from './UserAvatar.vue'
 
 const props = defineProps<{
-  spaceId: number
-  myRole: string
+  conversationId: number
+  myRole?: string
 }>()
 
 const message = useMessage()
 const auth = useAuthStore()
+const chatStore = useChatStore()
 
-const loading = ref(false)
-const loadingEarlier = ref(false)
 const submitting = ref(false)
+const loadingEarlier = ref(false)
 const draft = ref('')
-const replyTarget = ref<SpaceMessageVO | null>(null)
-const messages = ref<SpaceMessageVO[]>([])
-const total = ref(0)
-const current = ref(1)
-const pageSize = 20
+const replyTarget = ref<ChatMessageVO | null>(null)
 const deletingId = ref<number | null>(null)
 const listRef = ref<HTMLElement | null>(null)
+const currentPage = ref(1)
+const total = ref(0)
+const pageSize = 20
 
+const messages = computed(() => chatStore.messagesByConversationId[props.conversationId] || [])
 const hasEarlier = computed(() => messages.value.length < total.value)
-
-const chat = useSpaceChat({
-  onMessageNew: (incoming) => {
-    if (incoming.spaceId !== props.spaceId) return
-    upsertMessage(incoming)
-    void scrollToBottom()
-  },
-  onMessageDeleted: (messageId, spaceId) => {
-    if (spaceId != null && spaceId !== props.spaceId) return
-    removeMessage(messageId)
-  },
-  onError: (text) => {
-    message.warning(text)
-  },
-})
+const loading = computed(() => chatStore.loadingMessages && messages.value.length === 0)
 
 function formatDate(value: string) {
   const date = new Date(value)
@@ -62,47 +43,26 @@ function formatDate(value: string) {
   })
 }
 
-function getSenderName(item: SpaceMessageVO) {
+function getSenderName(item: ChatMessageVO) {
   return item.sender?.userName || item.sender?.userAccount || '未知用户'
 }
 
-function getSenderAvatarText(item: SpaceMessageVO) {
+function getSenderAvatarText(item: ChatMessageVO) {
   return getSenderName(item).slice(0, 1).toUpperCase()
 }
 
-function getReplySenderName(item: SpaceMessageVO) {
+function getReplySenderName(item: ChatMessageVO) {
   const reply = item.replyTo
   if (!reply) return ''
   return reply.sender?.userName || reply.sender?.userAccount || '未知用户'
 }
 
-function canDelete(item: SpaceMessageVO) {
-  return canDeleteSpaceMessage(props.myRole, item.sender?.id, auth.user?.id)
-}
-
-function isMine(item: SpaceMessageVO) {
+function isMine(item: ChatMessageVO) {
   return auth.user?.id != null && item.sender?.id === auth.user.id
 }
 
-function upsertMessage(incoming: SpaceMessageVO) {
-  const index = messages.value.findIndex((item) => item.id === incoming.id)
-  if (index >= 0) {
-    messages.value[index] = incoming
-    return
-  }
-  messages.value = [...messages.value, incoming]
-  total.value += 1
-}
-
-function removeMessage(messageId: number) {
-  const before = messages.value.length
-  messages.value = messages.value.filter((item) => item.id !== messageId)
-  if (messages.value.length < before) {
-    total.value = Math.max(0, total.value - 1)
-  }
-  if (replyTarget.value?.id === messageId) {
-    cancelReply()
-  }
+function canDelete(item: ChatMessageVO) {
+  return canDeleteSpaceMessage(props.myRole, item.sender?.id, auth.user?.id)
 }
 
 async function scrollToBottom() {
@@ -112,57 +72,43 @@ async function scrollToBottom() {
   el.scrollTop = el.scrollHeight
 }
 
-async function fetchLatest(reset = true) {
-  if (!props.spaceId) return
-
-  if (reset) {
-    current.value = 1
-  }
-
-  loading.value = true
-  try {
-    const response = await getSpaceMessages(props.spaceId, {
-      current: 1,
-      pageSize,
-    })
-    const page = response.data.data
-    if (!page) {
-      throw new Error(response.data.message || '消息加载失败')
+async function markLatestRead() {
+  const list = messages.value
+  if (!list.length) return
+  const maxId = list[list.length - 1]?.id
+  if (maxId) {
+    try {
+      await chatStore.markRead(props.conversationId, maxId)
+    } catch {
+      // ignore
     }
-    // 后端 orderByDesc，翻转成时间正序
-    messages.value = [...page.records].reverse()
-    total.value = page.total
-    current.value = 1
+  }
+}
+
+async function bootstrap() {
+  chatStore.setActiveConversation(props.conversationId)
+  try {
+    const { list, total: pageTotal } = await chatStore.fetchMessages(props.conversationId, true)
+    total.value = pageTotal
+    currentPage.value = 1
+    void list
     await scrollToBottom()
+    await markLatestRead()
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '消息加载失败'
     message.error(errorMessage)
-  } finally {
-    loading.value = false
   }
 }
 
 async function loadEarlier() {
-  if (!hasEarlier.value || loadingEarlier.value || loading.value) return
-
-  const nextPage = current.value + 1
+  if (!hasEarlier.value || loadingEarlier.value) return
   loadingEarlier.value = true
   const previousHeight = listRef.value?.scrollHeight ?? 0
   try {
-    const response = await getSpaceMessages(props.spaceId, {
-      current: nextPage,
-      pageSize,
-    })
-    const page = response.data.data
-    if (!page) {
-      throw new Error(response.data.message || '消息加载失败')
-    }
-    const older = [...page.records].reverse()
-    const existingIds = new Set(messages.value.map((item) => item.id))
-    const toPrepend = older.filter((item) => !existingIds.has(item.id))
-    messages.value = [...toPrepend, ...messages.value]
-    total.value = page.total
-    current.value = nextPage
+    const nextPage = currentPage.value + 1
+    const pageTotal = await chatStore.loadEarlier(props.conversationId, nextPage, pageSize)
+    total.value = pageTotal
+    currentPage.value = nextPage
     await nextTick()
     const el = listRef.value
     if (el) {
@@ -176,7 +122,7 @@ async function loadEarlier() {
   }
 }
 
-function startReply(item: SpaceMessageVO) {
+function startReply(item: ChatMessageVO) {
   replyTarget.value = item
 }
 
@@ -190,21 +136,13 @@ async function submitMessage() {
     message.warning('请输入消息内容')
     return
   }
-
   submitting.value = true
   try {
-    const response = await sendSpaceMessage(props.spaceId, {
-      content,
-      replyToId: replyTarget.value?.id ?? null,
-    })
-    const created = response.data.data
-    if (!created) {
-      throw new Error(response.data.message || '发送失败')
-    }
-    upsertMessage(created)
+    await chatStore.sendMessage(props.conversationId, content, replyTarget.value?.id ?? null)
     draft.value = ''
     cancelReply()
     await scrollToBottom()
+    await markLatestRead()
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '发送失败'
     message.error(errorMessage)
@@ -213,11 +151,10 @@ async function submitMessage() {
   }
 }
 
-async function handleDelete(item: SpaceMessageVO) {
+async function handleDelete(item: ChatMessageVO) {
   deletingId.value = item.id
   try {
-    await deleteSpaceMessage(props.spaceId, item.id)
-    removeMessage(item.id)
+    await chatStore.deleteMessage(props.conversationId, item.id)
   } catch (error) {
     const errorMessage = error instanceof Error && error.message ? error.message : '删除失败'
     message.error(errorMessage)
@@ -226,25 +163,46 @@ async function handleDelete(item: SpaceMessageVO) {
   }
 }
 
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    const list = messages.value
+    const maxId = list.reduce((max, item) => Math.max(max, item.id), 0)
+    if (maxId > 0) {
+      void chatStore.syncSince(props.conversationId, maxId)
+    }
+    void markLatestRead()
+  }
+}
+
 watch(
-  () => [props.spaceId, auth.token] as const,
-  ([spaceId, token]) => {
+  () => props.conversationId,
+  () => {
     cancelReply()
     draft.value = ''
-    if (!spaceId || !token) {
-      chat.disconnect()
-      messages.value = []
-      total.value = 0
-      return
-    }
-    void fetchLatest(true)
-    chat.connect(spaceId)
+    total.value = Number.MAX_SAFE_INTEGER
+    void bootstrap()
   },
   { immediate: true },
 )
 
+watch(
+  () => messages.value.length,
+  async (len, prev) => {
+    if (len > (prev || 0)) {
+      await scrollToBottom()
+    }
+  },
+)
+
+onMounted(() => {
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
 onBeforeUnmount(() => {
-  chat.disconnect()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  if (chatStore.activeConversationId === props.conversationId) {
+    chatStore.setActiveConversation(null)
+  }
 })
 </script>
 
@@ -254,7 +212,6 @@ onBeforeUnmount(() => {
       <h3>
         <n-icon :component="ChatbubbleOutline" />
         群聊
-        <span v-if="total > 0" class="chat-count">{{ total }}</span>
       </h3>
     </div>
 
@@ -265,7 +222,7 @@ onBeforeUnmount(() => {
         </n-button>
       </div>
 
-      <n-spin :show="loading && messages.length === 0">
+      <n-spin :show="loading">
         <div v-if="messages.length" class="chat-list">
           <article
             v-for="item in messages"
@@ -284,7 +241,6 @@ onBeforeUnmount(() => {
                 <span v-if="!isMine(item)" class="chat-author">{{ getSenderName(item) }}</span>
                 <span class="chat-time">{{ formatDate(item.createTime) }}</span>
               </div>
-
               <div class="chat-bubble">
                 <div v-if="item.replyTo" class="reply-quote">
                   <template v-if="item.replyTo.deleted">消息已删除</template>
@@ -295,7 +251,6 @@ onBeforeUnmount(() => {
                 </div>
                 <p class="chat-content">{{ item.content }}</p>
               </div>
-
               <div class="chat-actions">
                 <n-button text size="tiny" @click="startReply(item)">回复</n-button>
                 <n-popconfirm
@@ -367,12 +322,6 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.chat-count {
-  color: #6b7280;
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .chat-list-wrap {
   overflow: auto;
   border: 1px solid #e5e7eb;
@@ -401,12 +350,10 @@ onBeforeUnmount(() => {
 
 .chat-row.is-other {
   flex-direction: row;
-  justify-content: flex-start;
 }
 
 .chat-row.is-mine {
   flex-direction: row-reverse;
-  justify-content: flex-start;
 }
 
 .chat-avatar {
@@ -433,7 +380,6 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
-  max-width: 100%;
 }
 
 .chat-row.is-mine .chat-meta {
@@ -481,7 +427,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
 }
 
 .chat-row.is-mine .reply-quote {

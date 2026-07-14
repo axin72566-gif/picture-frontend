@@ -27,6 +27,7 @@ import PictureLibrary from '../../components/PictureLibrary.vue'
 import SpaceChatSection from '../../components/SpaceChatSection.vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
+import { useChatStore } from '../../stores/chatStore'
 import type { PageResponse } from '../../types/user'
 import type { SpaceInviteVO, SpaceMemberVO, SpaceVO } from '../../types/space'
 import { canUploadToSpace, getSpaceRoleLabel } from '../../utils/space'
@@ -36,6 +37,7 @@ const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const auth = useAuthStore()
+const chatStore = useChatStore()
 
 const loading = ref(false)
 const membersLoading = ref(false)
@@ -47,6 +49,8 @@ const actingInviteId = ref<number | null>(null)
 const showEditModal = ref(false)
 const showInviteModal = ref(false)
 const activeTab = ref<'pictures' | 'chat' | 'members' | 'invites'>('pictures')
+const chatConversationId = ref<number | null>(null)
+const chatLoading = ref(false)
 
 const space = ref<SpaceVO | null>(null)
 const loadError = ref('')
@@ -366,6 +370,7 @@ watch(
   spaceId,
   async () => {
     activeTab.value = 'pictures'
+    chatConversationId.value = null
     memberQuery.current = 1
     inviteQuery.current = 1
     await fetchSpace()
@@ -379,9 +384,22 @@ watch(
   { immediate: true },
 )
 
-watch(activeTab, (tab) => {
+watch(activeTab, async (tab) => {
   if (tab === 'invites' && isCreator.value) {
     void fetchInvites()
+  }
+  if (tab === 'chat' && space.value?.id) {
+    chatLoading.value = true
+    try {
+      const vo = await chatStore.resolveSpaceConversation(space.value.id)
+      chatConversationId.value = vo.id
+    } catch (error) {
+      const errorMessage = error instanceof Error && error.message ? error.message : '加载群聊失败'
+      message.error(errorMessage)
+      chatConversationId.value = null
+    } finally {
+      chatLoading.value = false
+    }
   }
 })
 </script>
@@ -463,11 +481,14 @@ watch(activeTab, (tab) => {
             </n-tab-pane>
 
             <n-tab-pane name="chat" tab="群聊">
-              <SpaceChatSection
-                v-if="activeTab === 'chat'"
-                :space-id="space.id"
-                :my-role="space.myRole || ''"
-              />
+              <n-spin :show="chatLoading">
+                <SpaceChatSection
+                  v-if="activeTab === 'chat' && chatConversationId"
+                  :conversation-id="chatConversationId"
+                  :my-role="space.myRole || ''"
+                />
+                <div v-else-if="!chatLoading" class="tab-empty">群聊暂不可用</div>
+              </n-spin>
             </n-tab-pane>
 
             <n-tab-pane name="members" tab="成员">

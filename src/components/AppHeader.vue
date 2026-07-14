@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { NIcon, useMessage } from 'naive-ui'
 import {
   CameraOutline,
+  ChatbubbleOutline,
   CloudUploadOutline,
   ImagesOutline,
   LogInOutline,
@@ -14,10 +15,12 @@ import {
   PersonCircleOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/authStore'
+import { useChatStore } from '../stores/chatStore'
 import UserAvatar from './UserAvatar.vue'
 import NotificationBell from './NotificationBell.vue'
 
 const auth = useAuthStore()
+const chatStore = useChatStore()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
@@ -36,6 +39,11 @@ const menuOptions = computed(() => [
     label: '我的空间',
     key: 'spaces',
     icon: renderIcon(PeopleOutline),
+  },
+  {
+    label: '消息',
+    key: 'messages',
+    icon: renderIcon(ChatbubbleOutline),
   },
   {
     label: '消息通知',
@@ -59,6 +67,7 @@ const menuOptions = computed(() => [
 ])
 
 const avatarText = computed(() => auth.displayName.slice(0, 1).toUpperCase())
+const chatUnread = computed(() => chatStore.unreadTotal)
 
 function isActive(paths: string[]) {
   return paths.includes(route.path)
@@ -80,6 +89,11 @@ async function handleMenuSelect(key: string | number) {
 
   if (key === 'spaces') {
     await router.push('/spaces')
+    return
+  }
+
+  if (key === 'messages') {
+    await router.push('/messages')
     return
   }
 
@@ -145,6 +159,19 @@ async function handleMenuSelect(key: string | number) {
           </template>
           空间
         </n-button>
+        <n-badge :value="chatUnread" :max="99" :show="chatUnread > 0">
+          <n-button
+            quaternary
+            class="nav-button"
+            :class="{ 'nav-button--active': route.path.startsWith('/messages') }"
+            @click="goProtected('/messages')"
+          >
+            <template #icon>
+              <n-icon :component="ChatbubbleOutline" />
+            </template>
+            消息
+          </n-button>
+        </n-badge>
       </nav>
 
       <div v-if="auth.isAuthenticated" class="header-actions">

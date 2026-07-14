@@ -1,10 +1,26 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from './components/AppHeader.vue'
+import { useChatSocket } from './composables/useChatSocket'
+import { useAuthStore } from './stores/authStore'
 
 const route = useRoute()
+const auth = useAuthStore()
+const chatSocket = useChatSocket()
 const showHeader = computed(() => !route.meta.guestLayout)
+
+watch(
+  () => auth.isAuthenticated,
+  (ok) => {
+    if (ok) {
+      chatSocket.ensureConnected()
+    } else {
+      chatSocket.disconnect()
+    }
+  },
+  { immediate: true },
+)
 
 const themeOverrides = {
   common: {
