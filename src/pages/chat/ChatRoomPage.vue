@@ -20,9 +20,17 @@ const conversation = computed(() =>
   chatStore.conversations.find((item) => item.id === conversationId.value) || null,
 )
 
-const title = computed(
-  () => conversation.value?.spaceName || `会话 #${conversationId.value}`,
-)
+const title = computed(() => {
+  const item = conversation.value
+  if (!item) return `会话 #${conversationId.value}`
+  if (item.title) return item.title
+  if (item.type === 'DM') {
+    return item.peer?.userName || item.peer?.userAccount || '私聊'
+  }
+  return item.spaceName || `会话 #${conversationId.value}`
+})
+
+const isDm = computed(() => conversation.value?.type === 'DM')
 
 watch(
   conversationId,
@@ -53,6 +61,13 @@ function goSpace() {
     void router.push(`/spaces/${spaceId}`)
   }
 }
+
+function goPeerProfile() {
+  const peerId = conversation.value?.peer?.id
+  if (peerId) {
+    void router.push(`/user/${peerId}`)
+  }
+}
 </script>
 
 <template>
@@ -65,8 +80,11 @@ function goSpace() {
         消息列表
       </n-button>
       <h1>{{ title }}</h1>
-      <n-button v-if="conversation?.spaceId" quaternary size="small" @click="goSpace">
+      <n-button v-if="conversation?.spaceId && !isDm" quaternary size="small" @click="goSpace">
         进入空间
+      </n-button>
+      <n-button v-else-if="isDm && conversation?.peer?.id" quaternary size="small" @click="goPeerProfile">
+        查看资料
       </n-button>
     </header>
 

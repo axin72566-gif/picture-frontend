@@ -3,7 +3,9 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { ArrowBackOutline, ChatbubbleOutline } from '@vicons/ionicons5'
+import UserAvatar from '../../components/UserAvatar.vue'
 import { useChatStore } from '../../stores/chatStore'
+import type { ConversationVO } from '../../types/chat'
 
 const router = useRouter()
 const message = useMessage()
@@ -19,6 +21,22 @@ function formatTime(value?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function conversationTitle(item: ConversationVO) {
+  if (item.title) return item.title
+  if (item.type === 'DM') {
+    return item.peer?.userName || item.peer?.userAccount || '私聊'
+  }
+  return item.spaceName || `会话 #${item.id}`
+}
+
+function conversationPreview(item: ConversationVO) {
+  return item.lastMessage?.content || (item.type === 'DM' ? '已创建会话' : '暂无消息')
+}
+
+function avatarText(item: ConversationVO) {
+  return conversationTitle(item).slice(0, 1).toUpperCase()
 }
 
 function openConversation(id: number) {
@@ -59,10 +77,21 @@ onMounted(async () => {
           class="card"
           @click="openConversation(item.id)"
         >
+          <UserAvatar
+            v-if="item.type === 'DM'"
+            :size="42"
+            :src="item.peer?.userAvatar || ''"
+            :text="avatarText(item)"
+          />
           <div class="main">
-            <strong>{{ item.spaceName || (item.type === 'DM' ? '私聊' : `会话 #${item.id}`) }}</strong>
+            <div class="title-row">
+              <strong>{{ conversationTitle(item) }}</strong>
+              <n-tag size="tiny" :bordered="false" :type="item.type === 'DM' ? 'info' : 'success'">
+                {{ item.type === 'DM' ? '私聊' : '群' }}
+              </n-tag>
+            </div>
             <p class="preview">
-              {{ item.lastMessage?.content || '暂无消息' }}
+              {{ conversationPreview(item) }}
             </p>
           </div>
           <div class="side">
@@ -114,7 +143,7 @@ onMounted(async () => {
 
 .card {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid #e2e8f0;
@@ -129,11 +158,20 @@ onMounted(async () => {
 
 .main {
   min-width: 0;
+  flex: 1;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .main strong {
-  display: block;
-  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preview {
@@ -150,6 +188,7 @@ onMounted(async () => {
   justify-items: end;
   align-content: space-between;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .time {

@@ -21,6 +21,8 @@ export interface ConversationVO {
   type: 'SPACE' | 'DM' | string
   spaceId: number | null
   spaceName: string | null
+  peer?: UserVO | null
+  title?: string | null
   unreadCount: number
   lastMessage: ChatMessageVO | null
   updateTime: string

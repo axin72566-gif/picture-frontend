@@ -23,6 +23,10 @@ export function getConversationBySpace(spaceId: number) {
   return request.get<BaseResponse<ConversationVO>>(`/api/chat/conversations/by-space/${spaceId}`)
 }
 
+export function openDmConversation(data: { peerUserId: number }) {
+  return request.post<BaseResponse<ConversationVO>>('/api/chat/conversations/dm', data)
+}
+
 export function getConversationMessages(
   conversationId: number,
   params: { current?: number; pageSize?: number; sinceId?: number; limit?: number } = {},

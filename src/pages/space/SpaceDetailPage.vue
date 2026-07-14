@@ -10,6 +10,7 @@ import {
   ExitOutline,
   PersonAddOutline,
   CloudUploadOutline,
+  ChatbubbleOutline,
 } from '@vicons/ionicons5'
 import {
   cancelSpaceInvite,
@@ -46,6 +47,7 @@ const saving = ref(false)
 const inviting = ref(false)
 const actingMemberId = ref<number | null>(null)
 const actingInviteId = ref<number | null>(null)
+const dmLoadingUserId = ref<number | null>(null)
 const showEditModal = ref(false)
 const showInviteModal = ref(false)
 const activeTab = ref<'pictures' | 'chat' | 'members' | 'invites'>('pictures')
@@ -366,6 +368,21 @@ function goToUser(userId?: number | null) {
   void router.push(`/user/${userId}`)
 }
 
+async function openDmWithMember(member: SpaceMemberVO) {
+  const peerId = member.user?.id
+  if (!peerId || auth.user?.id === peerId) return
+  dmLoadingUserId.value = peerId
+  try {
+    const vo = await chatStore.openDm(peerId)
+    await router.push(`/messages/${vo.id}`)
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '打开私聊失败'
+    message.error(errorMessage)
+  } finally {
+    dmLoadingUserId.value = null
+  }
+}
+
 watch(
   spaceId,
   async () => {
@@ -508,6 +525,18 @@ watch(activeTab, async (tab) => {
                       </span>
                     </button>
                     <div class="member-actions">
+                      <n-button
+                        v-if="item.user?.id && item.user.id !== auth.user?.id"
+                        size="small"
+                        secondary
+                        :loading="dmLoadingUserId === item.user.id"
+                        @click="openDmWithMember(item)"
+                      >
+                        <template #icon>
+                          <n-icon :component="ChatbubbleOutline" />
+                        </template>
+                        私聊
+                      </n-button>
                       <template v-if="isCreator && item.role !== 'CREATOR'">
                         <n-select
                           :value="item.role"

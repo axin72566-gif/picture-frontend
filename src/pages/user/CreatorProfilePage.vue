@@ -2,20 +2,23 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { ArrowBackOutline, PeopleOutline, PersonAddOutline, PersonCircleOutline } from '@vicons/ionicons5'
+import { ArrowBackOutline, ChatbubbleOutline, PeopleOutline, PersonAddOutline, PersonCircleOutline } from '@vicons/ionicons5'
 import { followUser, getUserById, getUserFollowStatus, unfollowUser } from '../../api/user'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
+import { useChatStore } from '../../stores/chatStore'
 import type { UserVO } from '../../types/user'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const auth = useAuthStore()
+const chatStore = useChatStore()
 
 const loading = ref(false)
 const followStatusLoading = ref(false)
 const followActionLoading = ref(false)
+const dmLoading = ref(false)
 const isFollowing = ref(false)
 const followButtonHovered = ref(false)
 const user = ref<UserVO | null>(null)
@@ -166,6 +169,24 @@ function goToFollowList(type: 'followers' | 'following') {
   void router.push(`/user/${userId.value}/${type}`)
 }
 
+async function openDm() {
+  if (!user.value) return
+  if (!auth.isAuthenticated) {
+    await router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  dmLoading.value = true
+  try {
+    const vo = await chatStore.openDm(user.value.id)
+    await router.push(`/messages/${vo.id}`)
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '打开私聊失败'
+    message.error(errorMessage)
+  } finally {
+    dmLoading.value = false
+  }
+}
+
 watch(userId, () => {
   void loadUser()
 }, { immediate: true })
@@ -204,6 +225,12 @@ watch(userId, () => {
                   <n-icon :component="isFollowing ? PeopleOutline : PersonAddOutline" />
                 </template>
                 {{ followButtonLabel }}
+              </n-button>
+              <n-button secondary :loading="dmLoading" @click="openDm">
+                <template #icon>
+                  <n-icon :component="ChatbubbleOutline" />
+                </template>
+                发消息
               </n-button>
             </div>
           </div>
@@ -290,6 +317,8 @@ watch(userId, () => {
 .creator-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .follow-stats {

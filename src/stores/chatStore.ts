@@ -6,6 +6,7 @@ import {
   getConversationMessages,
   getConversations,
   markConversationRead,
+  openDmConversation,
   sendChatMessage,
 } from '../api/chat'
 import type { ChatEvent, ChatMessageVO, ConversationVO } from '../types/chat'
@@ -137,6 +138,22 @@ export const useChatStore = defineStore('chat', () => {
     return vo
   }
 
+  async function openDm(peerUserId: number) {
+    const response = await openDmConversation({ peerUserId })
+    const vo = response.data.data
+    if (!vo) {
+      throw new Error(response.data.message || '打开私聊失败')
+    }
+    const index = conversations.value.findIndex((item) => item.id === vo.id)
+    if (index >= 0) {
+      conversations.value[index] = vo
+      conversations.value = [...conversations.value]
+    } else {
+      conversations.value = [vo, ...conversations.value]
+    }
+    return vo
+  }
+
   async function fetchMessages(conversationId: number, reset = true) {
     loadingMessages.value = true
     try {
@@ -246,6 +263,7 @@ export const useChatStore = defineStore('chat', () => {
     handleEvent,
     fetchConversations,
     resolveSpaceConversation,
+    openDm,
     fetchMessages,
     loadEarlier,
     syncSince,
