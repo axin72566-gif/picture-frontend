@@ -5,7 +5,7 @@ import type {
   ChatReadRequest,
   ConversationVO,
 } from '../types/chat'
-import type { BaseResponse, PageResponse } from '../types/user'
+import type { BaseResponse, PageResponse, UserVO } from '../types/user'
 
 function cleanParams(params: Record<string, unknown>) {
   return Object.fromEntries(
@@ -27,6 +27,10 @@ export function openDmConversation(data: { peerUserId: number }) {
   return request.post<BaseResponse<ConversationVO>>('/api/chat/conversations/dm', data)
 }
 
+export function getConversationMembers(conversationId: number) {
+  return request.get<BaseResponse<UserVO[]>>(`/api/chat/conversations/${conversationId}/members`)
+}
+
 export function getConversationMessages(
   conversationId: number,
   params: { current?: number; pageSize?: number; sinceId?: number; limit?: number } = {},
@@ -39,6 +43,36 @@ export function getConversationMessages(
 
 export function sendChatMessage(conversationId: number, data: ChatMessageAddRequest) {
   return request.post<BaseResponse<ChatMessageVO>>(`/api/chat/conversations/${conversationId}/messages`, data)
+}
+
+export function sendChatImageMessage(
+  conversationId: number,
+  data: {
+    file: File
+    caption?: string
+    replyToId?: number | null
+    clientMsgId?: string | null
+    mentionUserIds?: number[] | null
+  },
+) {
+  const form = new FormData()
+  form.append('file', data.file)
+  if (data.caption) form.append('caption', data.caption)
+  if (data.replyToId != null) form.append('replyToId', String(data.replyToId))
+  if (data.clientMsgId) form.append('clientMsgId', data.clientMsgId)
+  if (data.mentionUserIds?.length) {
+    for (const id of data.mentionUserIds) {
+      form.append('mentionUserIds', String(id))
+    }
+  }
+  return request.post<BaseResponse<ChatMessageVO>>(
+    `/api/chat/conversations/${conversationId}/messages/image`,
+    form,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    },
+  )
 }
 
 export function deleteChatMessage(conversationId: number, messageId: number) {

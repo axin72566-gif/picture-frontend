@@ -7,6 +7,7 @@ import {
   getConversations,
   markConversationRead,
   openDmConversation,
+  sendChatImageMessage,
   sendChatMessage,
 } from '../api/chat'
 import type { ChatEvent, ChatMessageVO, ConversationVO } from '../types/chat'
@@ -219,15 +220,47 @@ export const useChatStore = defineStore('chat', () => {
     content: string,
     replyToId?: number | null,
     clientMsgId?: string,
+    mentionUserIds?: number[] | null,
   ) {
     const response = await sendChatMessage(conversationId, {
       content,
       replyToId: replyToId ?? null,
       clientMsgId: clientMsgId ?? crypto.randomUUID(),
+      mentionUserIds: mentionUserIds?.length ? mentionUserIds : null,
     })
     const created = response.data.data
     if (!created) {
       throw new Error(response.data.message || '发送失败')
+    }
+    upsertMessage(conversationId, created)
+    patchConversation({
+      id: conversationId,
+      lastMessage: created,
+      updateTime: created.createTime,
+    })
+    return created
+  }
+
+  async function sendImage(
+    conversationId: number,
+    file: File,
+    options?: {
+      caption?: string
+      replyToId?: number | null
+      mentionUserIds?: number[] | null
+      clientMsgId?: string
+    },
+  ) {
+    const response = await sendChatImageMessage(conversationId, {
+      file,
+      caption: options?.caption,
+      replyToId: options?.replyToId ?? null,
+      clientMsgId: options?.clientMsgId ?? crypto.randomUUID(),
+      mentionUserIds: options?.mentionUserIds?.length ? options.mentionUserIds : null,
+    })
+    const created = response.data.data
+    if (!created) {
+      throw new Error(response.data.message || '发送图片失败')
     }
     upsertMessage(conversationId, created)
     patchConversation({
@@ -269,6 +302,7 @@ export const useChatStore = defineStore('chat', () => {
     syncSince,
     syncActiveConversation,
     sendMessage,
+    sendImage,
     deleteMessage,
     markRead,
     setActiveConversation,

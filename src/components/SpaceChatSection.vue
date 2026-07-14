@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { ChatbubbleOutline, TrashOutline } from '@vicons/ionicons5'
+import { ChatbubbleOutline, ImageOutline, TrashOutline } from '@vicons/ionicons5'
+import { getConversationMembers } from '../api/chat'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
 import type { ChatMessageVO } from '../types/chat'
+import type { UserVO } from '../types/user'
 import { canDeleteSpaceMessage } from '../utils/space'
 import UserAvatar from './UserAvatar.vue'
 
@@ -13,23 +16,46 @@ const props = defineProps<{
   myRole?: string
 }>()
 
+const router = useRouter()
 const message = useMessage()
 const auth = useAuthStore()
 const chatStore = useChatStore()
 
 const submitting = ref(false)
+const uploadingImage = ref(false)
 const loadingEarlier = ref(false)
 const draft = ref('')
 const replyTarget = ref<ChatMessageVO | null>(null)
 const deletingId = ref<number | null>(null)
 const listRef = ref<HTMLElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 const currentPage = ref(1)
 const total = ref(0)
 const pageSize = 20
 
+const members = ref<UserVO[]>([])
+const mentionIds = ref<number[]>([])
+const showMentionPicker = ref(false)
+const mentionFilter = ref('')
+const mentionStartIndex = ref(-1)
+
 const messages = computed(() => chatStore.messagesByConversationId[props.conversationId] || [])
 const hasEarlier = computed(() => messages.value.length < total.value)
 const loading = computed(() => chatStore.loadingMessages && messages.value.length === 0)
+
+const mentionCandidates = computed(() => {
+  const q = mentionFilter.value.trim().toLowerCase()
+  const myId = auth.user?.id
+  return members.value
+    .filter((m) => m.id !== myId)
+    .filter((m) => {
+      if (!q) return true
+      const name = (m.userName || '').toLowerCase()
+      const account = (m.userAccount || '').toLowerCase()
+      return name.includes(q) || account.includes(q)
+    })
+    .slice(0, 8)
+})
 
 function formatDate(value: string) {
   const date = new Date(value)
@@ -57,12 +83,28 @@ function getReplySenderName(item: ChatMessageVO) {
   return reply.sender?.userName || reply.sender?.userAccount || '未知用户'
 }
 
+function isImageMessage(item: { messageType?: string | null } | null | undefined) {
+  return item?.messageType === 'IMAGE'
+}
+
+function previewContent(item: { messageType?: string | null; content?: string | null } | null | undefined) {
+  if (!item) return ''
+  if (isImageMessage(item)) {
+    return item.content?.trim() || '[图片]'
+  }
+  return item.content || ''
+}
+
 function isMine(item: ChatMessageVO) {
   return auth.user?.id != null && item.sender?.id === auth.user.id
 }
 
 function canDelete(item: ChatMessageVO) {
   return canDeleteSpaceMessage(props.myRole, item.sender?.id, auth.user?.id)
+}
+
+function memberDisplayName(user: UserVO) {
+  return user.userName || user.userAccount || `用户${user.id}`
 }
 
 async function scrollToBottom() {
@@ -85,10 +127,24 @@ async function markLatestRead() {
   }
 }
 
+async function loadMembers() {
+  try {
+    const response = await getConversationMembers(props.conversationId)
+    members.value = response.data.data || []
+  } catch {
+    members.value = []
+  }
+}
+
 async function bootstrap() {
   chatStore.setActiveConversation(props.conversationId)
+  mentionIds.value = []
+  showMentionPicker.value = false
   try {
-    const { list, total: pageTotal } = await chatStore.fetchMessages(props.conversationId, true)
+    const [{ list, total: pageTotal }] = await Promise.all([
+      chatStore.fetchMessages(props.conversationId, true),
+      loadMembers(),
+    ])
     total.value = pageTotal
     currentPage.value = 1
     void list
@@ -130,6 +186,89 @@ function cancelReply() {
   replyTarget.value = null
 }
 
+function onDraftInput(value: string) {
+  draft.value = value
+  const cursor = value.length
+  const before = value.slice(0, cursor)
+  const atMatch = before.match(/@([^\s@]*)$/)
+  if (atMatch) {
+    mentionStartIndex.value = before.lastIndexOf('@')
+    mentionFilter.value = atMatch[1] || ''
+    showMentionPicker.value = true
+  } else {
+    showMentionPicker.value = false
+    mentionStartIndex.value = -1
+    mentionFilter.value = ''
+  }
+}
+
+function pickMention(user: UserVO) {
+  const name = memberDisplayName(user)
+  const start = mentionStartIndex.value
+  if (start < 0) {
+    draft.value = `${draft.value}@${name} `
+  } else {
+    const before = draft.value.slice(0, start)
+    const afterMatch = draft.value.slice(start).match(/^@[^\s@]*/)
+    const rest = afterMatch ? draft.value.slice(start + afterMatch[0].length) : draft.value.slice(start)
+    draft.value = `${before}@${name} ${rest.replace(/^\s*/, '')}`
+  }
+  if (!mentionIds.value.includes(user.id)) {
+    mentionIds.value = [...mentionIds.value, user.id]
+  }
+  showMentionPicker.value = false
+  mentionStartIndex.value = -1
+  mentionFilter.value = ''
+}
+
+function goUser(userId?: number | null) {
+  if (!userId) return
+  if (auth.user?.id === userId) {
+    void router.push('/profile')
+    return
+  }
+  void router.push(`/user/${userId}`)
+}
+
+function renderContentParts(item: ChatMessageVO) {
+  const text = item.content || ''
+  const mentions = item.mentions || []
+  if (!mentions.length || !text) {
+    return [{ type: 'text' as const, text }]
+  }
+  const names = mentions
+    .map((m) => ({ user: m, name: memberDisplayName(m) }))
+    .filter((m) => m.name)
+    .sort((a, b) => b.name.length - a.name.length)
+  const parts: Array<{ type: 'text' | 'mention'; text: string; userId?: number }> = []
+  let i = 0
+  while (i < text.length) {
+    let matched: (typeof names)[number] | null = null
+    if (text[i] === '@') {
+      for (const candidate of names) {
+        const token = `@${candidate.name}`
+        if (text.startsWith(token, i)) {
+          matched = candidate
+          break
+        }
+      }
+    }
+    if (matched) {
+      parts.push({ type: 'mention', text: `@${matched.name}`, userId: matched.user.id })
+      i += matched.name.length + 1
+    } else {
+      const last = parts[parts.length - 1]
+      if (last?.type === 'text') {
+        last.text += text[i]
+      } else {
+        parts.push({ type: 'text', text: text[i] })
+      }
+      i += 1
+    }
+  }
+  return parts
+}
+
 async function submitMessage() {
   const content = draft.value.trim()
   if (!content) {
@@ -138,8 +277,18 @@ async function submitMessage() {
   }
   submitting.value = true
   try {
-    await chatStore.sendMessage(props.conversationId, content, replyTarget.value?.id ?? null)
+    const validMentions = mentionIds.value.filter((id) =>
+      members.value.some((m) => m.id === id && m.id !== auth.user?.id),
+    )
+    await chatStore.sendMessage(
+      props.conversationId,
+      content,
+      replyTarget.value?.id ?? null,
+      undefined,
+      validMentions,
+    )
     draft.value = ''
+    mentionIds.value = []
     cancelReply()
     await scrollToBottom()
     await markLatestRead()
@@ -148,6 +297,50 @@ async function submitMessage() {
     message.error(errorMessage)
   } finally {
     submitting.value = false
+  }
+}
+
+function openImagePicker() {
+  fileInputRef.value?.click()
+}
+
+async function onImageSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (!allowed.includes(file.type)) {
+    message.error('仅支持 jpg/png/gif/webp')
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    message.error('图片不能超过 10MB')
+    return
+  }
+
+  uploadingImage.value = true
+  try {
+    const caption = draft.value.trim()
+    const validMentions = mentionIds.value.filter((id) =>
+      members.value.some((m) => m.id === id && m.id !== auth.user?.id),
+    )
+    await chatStore.sendImage(props.conversationId, file, {
+      caption: caption || undefined,
+      replyToId: replyTarget.value?.id ?? null,
+      mentionUserIds: validMentions,
+    })
+    draft.value = ''
+    mentionIds.value = []
+    cancelReply()
+    await scrollToBottom()
+    await markLatestRead()
+  } catch (error) {
+    const errorMessage = error instanceof Error && error.message ? error.message : '发送图片失败'
+    message.error(errorMessage)
+  } finally {
+    uploadingImage.value = false
   }
 }
 
@@ -179,6 +372,7 @@ watch(
   () => {
     cancelReply()
     draft.value = ''
+    mentionIds.value = []
     total.value = Number.MAX_SAFE_INTEGER
     void bootstrap()
   },
@@ -246,10 +440,31 @@ onBeforeUnmount(() => {
                   <template v-if="item.replyTo.deleted">消息已删除</template>
                   <template v-else>
                     <strong>{{ getReplySenderName(item) }}</strong>
-                    ：{{ item.replyTo.content }}
+                    ：{{ previewContent(item.replyTo) }}
                   </template>
                 </div>
-                <p class="chat-content">{{ item.content }}</p>
+                <a
+                  v-if="isImageMessage(item) && item.mediaUrl"
+                  class="chat-image-link"
+                  :href="item.mediaUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <img class="chat-image" :src="item.mediaUrl" alt="聊天图片" />
+                </a>
+                <p v-if="item.content" class="chat-content">
+                  <template v-for="(part, idx) in renderContentParts(item)" :key="idx">
+                    <button
+                      v-if="part.type === 'mention'"
+                      type="button"
+                      class="mention-token"
+                      @click="goUser(part.userId)"
+                    >
+                      {{ part.text }}
+                    </button>
+                    <template v-else>{{ part.text }}</template>
+                  </template>
+                </p>
               </div>
               <div class="chat-actions">
                 <n-button text size="tiny" @click="startReply(item)">回复</n-button>
@@ -282,20 +497,49 @@ onBeforeUnmount(() => {
         <div class="reply-banner-text">
           回复
           <strong>{{ getSenderName(replyTarget) }}</strong>
-          ：{{ replyTarget.content }}
+          ：{{ previewContent(replyTarget) }}
         </div>
         <n-button text size="tiny" @click="cancelReply">取消</n-button>
       </div>
+
+      <div v-if="showMentionPicker && mentionCandidates.length" class="mention-picker">
+        <button
+          v-for="user in mentionCandidates"
+          :key="user.id"
+          type="button"
+          class="mention-option"
+          @mousedown.prevent="pickMention(user)"
+        >
+          <UserAvatar :size="24" :src="user.userAvatar || ''" :text="memberDisplayName(user).slice(0, 1)" />
+          <span>{{ memberDisplayName(user) }}</span>
+          <small>@{{ user.userAccount }}</small>
+        </button>
+      </div>
+
       <n-input
-        v-model:value="draft"
+        :value="draft"
         type="textarea"
         maxlength="500"
         show-count
         :autosize="{ minRows: 2, maxRows: 4 }"
-        :placeholder="replyTarget ? `回复 @${getSenderName(replyTarget)}` : '输入消息…'"
+        :placeholder="replyTarget ? `回复 @${getSenderName(replyTarget)}` : '输入消息，@ 可提及成员…'"
+        @update:value="onDraftInput"
         @keydown.enter.exact.prevent="submitMessage"
       />
       <div class="composer-actions">
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          class="hidden-file"
+          @change="onImageSelected"
+        />
+        <n-button quaternary size="small" :loading="uploadingImage" @click="openImagePicker">
+          <template #icon>
+            <n-icon :component="ImageOutline" />
+          </template>
+          图片
+        </n-button>
         <n-button type="primary" size="small" :loading="submitting" @click="submitMessage">
           发送
         </n-button>
@@ -443,6 +687,20 @@ onBeforeUnmount(() => {
   color: #166534;
 }
 
+.chat-image-link {
+  display: block;
+  max-width: 240px;
+}
+
+.chat-image {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .chat-content {
   margin: 0;
   color: #111827;
@@ -450,6 +708,20 @@ onBeforeUnmount(() => {
   line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.mention-token {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  cursor: pointer;
+}
+
+.chat-row.is-mine .mention-token {
+  color: #166534;
 }
 
 .chat-actions {
@@ -470,6 +742,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-composer {
+  position: relative;
   display: grid;
   gap: 8px;
 }
@@ -493,8 +766,58 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.mention-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% - 8px);
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.mention-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mention-option:hover {
+  background: #f1f5f9;
+}
+
+.mention-option span {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.mention-option small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .composer-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.hidden-file {
+  display: none;
 }
 </style>

@@ -52,6 +52,11 @@ export function useNotificationNavigation() {
 
     if (item.type === 'SPACE_INVITE') {
       await router.push('/spaces/invites')
+      return
+    }
+
+    if (item.type === 'CHAT_MENTION' && item.conversationId) {
+      await router.push(`/messages/${item.conversationId}`)
     }
   }
 

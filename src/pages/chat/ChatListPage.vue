@@ -32,7 +32,14 @@ function conversationTitle(item: ConversationVO) {
 }
 
 function conversationPreview(item: ConversationVO) {
-  return item.lastMessage?.content || (item.type === 'DM' ? '已创建会话' : '暂无消息')
+  const last = item.lastMessage
+  if (!last) {
+    return item.type === 'DM' ? '已创建会话' : '暂无消息'
+  }
+  if (last.messageType === 'IMAGE') {
+    return last.content?.trim() || '[图片]'
+  }
+  return last.content || '暂无消息'
 }
 
 function avatarText(item: ConversationVO) {

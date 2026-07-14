@@ -6,6 +6,7 @@ const TYPE_LABELS: Record<NotificationType, string> = {
   REPLY: '回复了你的评论',
   LIKE: '赞了你的图片',
   SPACE_INVITE: '邀请你加入空间',
+  CHAT_MENTION: '在聊天中提到了你',
 }
 
 export function getNotificationTypeLabel(type: NotificationType) {
