@@ -28,6 +28,8 @@ import PictureLibrary from '../../components/PictureLibrary.vue'
 import SpaceChatSection from '../../components/SpaceChatSection.vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { useAuthStore } from '../../stores/authStore'
+import { VipErrorCode } from '../../types/vip'
+import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError'
 import { useChatStore } from '../../stores/chatStore'
 import type { PageResponse } from '../../types/user'
 import type { SpaceInviteVO, SpaceMemberVO, SpaceVO } from '../../types/space'
@@ -256,8 +258,20 @@ async function handleInvite() {
     inviteQuery.current = 1
     await fetchInvites()
   } catch (error) {
-    const errorMessage = error instanceof Error && error.message ? error.message : '邀请失败'
-    message.error(errorMessage)
+    const code = getApiErrorCode(error)
+    if (code === VipErrorCode.MEMBER_QUOTA_EXCEEDED) {
+      dialog.warning({
+        title: '成员额度已满',
+        content: getApiErrorMessage(error, '空间成员额度已达上限，开通 VIP 可提升成员上限'),
+        positiveText: '开通 VIP',
+        negativeText: '取消',
+        onPositiveClick: () => {
+          void router.push('/vip')
+        },
+      })
+      return
+    }
+    message.error(getApiErrorMessage(error, '邀请失败'))
   } finally {
     inviting.value = false
   }

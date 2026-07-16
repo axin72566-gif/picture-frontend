@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useMessage } from 'naive-ui'
+import { useDialog, useMessage } from 'naive-ui'
 import { ArrowBackOutline, PeopleOutline, AddOutline, MailOutline } from '@vicons/ionicons5'
 import { createSpace, getMySpaces } from '../../api/space'
 import type { PageResponse } from '../../types/user'
 import type { SpaceVO } from '../../types/space'
+import { VipErrorCode } from '../../types/vip'
+import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError'
 import { getSpaceRoleLabel } from '../../utils/space'
 
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 
 const loading = ref(false)
 const creating = ref(false)
@@ -89,8 +92,20 @@ async function handleCreate() {
     showCreateModal.value = false
     await router.push(`/spaces/${space.id}`)
   } catch (error) {
-    const errorMessage = error instanceof Error && error.message ? error.message : '创建失败'
-    message.error(errorMessage)
+    const code = getApiErrorCode(error)
+    if (code === VipErrorCode.SPACE_QUOTA_EXCEEDED) {
+      dialog.warning({
+        title: '空间额度已满',
+        content: getApiErrorMessage(error, '可创建空间数已达上限，开通 VIP 可提升额度'),
+        positiveText: '开通 VIP',
+        negativeText: '取消',
+        onPositiveClick: () => {
+          void router.push('/vip')
+        },
+      })
+      return
+    }
+    message.error(getApiErrorMessage(error, '创建失败'))
   } finally {
     creating.value = false
   }

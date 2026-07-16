@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import type { BaseResponse } from '../types/user'
+import { ApiError } from '../utils/apiError'
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/',
@@ -30,8 +31,8 @@ function redirectToLogin() {
   window.location.href = target
 }
 
-function buildError(message?: string) {
-  return new Error(message || '请求失败，请稍后重试')
+function buildError(message?: string, code = -1) {
+  return new ApiError(message || '请求失败，请稍后重试', code)
 }
 
 function getRequestUrl(config?: InternalAxiosRequestConfig) {
@@ -101,7 +102,7 @@ function handleUnauthorized(config?: InternalAxiosRequestConfig, message?: strin
     redirectToLogin()
   }
 
-  return Promise.reject(buildError(message || '登录已过期，请重新登录'))
+  return Promise.reject(buildError(message || '登录已过期，请重新登录', 40100))
 }
 
 request.interceptors.request.use((config) => {
@@ -123,7 +124,7 @@ request.interceptors.response.use(
     }
 
     if (typeof payload?.code === 'number' && payload.code !== 0) {
-      return Promise.reject(buildError(payload.message))
+      return Promise.reject(buildError(payload.message, payload.code))
     }
 
     return response
@@ -134,6 +135,10 @@ request.interceptors.response.use(
 
     if (status === 401 || payload?.code === 40100) {
       return handleUnauthorized(error.config, payload?.message)
+    }
+
+    if (typeof payload?.code === 'number') {
+      return Promise.reject(buildError(payload.message || error.message, payload.code))
     }
 
     return Promise.reject(buildError(payload?.message || error.message))

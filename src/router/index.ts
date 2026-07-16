@@ -92,9 +92,27 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/vip',
+      name: 'vip',
+      component: () => import('../pages/vip/VipPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/coupons',
+      name: 'coupons',
+      component: () => import('../pages/coupon/CouponPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin',
       name: 'admin-moderation',
       component: () => import('../pages/admin/AdminModerationPage.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/admin/coupons',
+      name: 'admin-coupons',
+      component: () => import('../pages/admin/AdminCouponPage.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
     },
     {

@@ -9,10 +9,10 @@ import {
   getModerationLogs,
   getSensitiveWords,
   updateSensitiveWord,
-} from '../api/admin'
-import { useAuthStore } from '../stores/authStore'
-import type { ChatModerationLogVO, SensitiveWordVO } from '../types/admin'
-import type { PageResponse } from '../types/user'
+} from '../../api/admin'
+import { useAuthStore } from '../../stores/authStore'
+import type { ChatModerationLogVO, SensitiveWordVO } from '../../types/admin'
+import type { PageResponse } from '../../types/user'
 
 const router = useRouter()
 const message = useMessage()
@@ -182,7 +182,10 @@ onMounted(async () => {
         <n-icon :component="ShieldCheckmarkOutline" />
         聊天治理
       </h1>
-      <p class="subtitle">敏感词拦截与审计日志（仅管理员）</p>
+      <p class="subtitle">
+        敏感词拦截与审计日志（仅管理员） ·
+        <n-button text type="primary" @click="router.push('/admin/coupons')">优惠券活动</n-button>
+      </p>
     </section>
 
     <section class="page-width body">

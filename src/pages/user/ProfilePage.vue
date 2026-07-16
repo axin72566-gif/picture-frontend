@@ -7,6 +7,7 @@ import {
   CameraOutline,
   CloudUploadOutline,
   CreateOutline,
+  DiamondOutline,
   LogOutOutline,
   RefreshOutline,
   SaveOutline,
@@ -43,6 +44,8 @@ const avatarPreviewSrc = computed(() => avatarPreviewUrl.value || auth.avatarDis
 const selectedAvatarSize = computed(() => (selectedAvatarFile.value ? formatFileSize(selectedAvatarFile.value.size) : ''))
 const followerCount = computed(() => auth.user?.followerCount ?? 0)
 const followingCount = computed(() => auth.user?.followingCount ?? 0)
+const vipExpireLabel = computed(() => formatDate(auth.user?.vipExpireTime || undefined))
+const vipActive = computed(() => !!auth.user?.vipActive)
 
 const profileChanged = computed(() => {
   const currentName = auth.user?.userName || ''
@@ -292,6 +295,20 @@ onBeforeUnmount(() => {
                 {{ auth.roleLabel }}
               </n-tag>
             </n-descriptions-item>
+            <n-descriptions-item label="VIP">
+              <div class="vip-row">
+                <n-tag :type="vipActive ? 'success' : 'default'" size="small">
+                  {{ vipActive ? '有效' : '未开通' }}
+                </n-tag>
+                <span v-if="auth.user?.vipExpireTime" class="vip-expire">到期 {{ vipExpireLabel }}</span>
+                <n-button size="tiny" secondary @click="router.push('/vip')">
+                  <template #icon>
+                    <n-icon :component="DiamondOutline" />
+                  </template>
+                  {{ vipActive ? '续费' : '开通' }}
+                </n-button>
+              </div>
+            </n-descriptions-item>
             <n-descriptions-item label="个人简介">
               {{ profileText }}
             </n-descriptions-item>
@@ -468,6 +485,18 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 18px;
   margin-bottom: 18px;
+}
+
+.vip-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vip-expire {
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .follow-stats {

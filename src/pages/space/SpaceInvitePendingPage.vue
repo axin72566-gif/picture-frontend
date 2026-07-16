@@ -7,6 +7,8 @@ import { acceptSpaceInvite, getMyPendingInvites, rejectSpaceInvite } from '../..
 import UserAvatar from '../../components/UserAvatar.vue'
 import type { PageResponse } from '../../types/user'
 import type { SpaceInviteVO } from '../../types/space'
+import { VipErrorCode } from '../../types/vip'
+import { getApiErrorCode, getApiErrorMessage } from '../../utils/apiError'
 import { getSpaceRoleLabel } from '../../utils/space'
 
 const router = useRouter()
@@ -78,8 +80,12 @@ async function handleAccept(item: SpaceInviteVO) {
     await removeInvite(item.id)
     await router.push(`/spaces/${item.spaceId}`)
   } catch (error) {
-    const errorMessage = error instanceof Error && error.message ? error.message : '操作失败'
-    message.error(errorMessage)
+    const code = getApiErrorCode(error)
+    if (code === VipErrorCode.MEMBER_QUOTA_EXCEEDED) {
+      message.error('空间成员已满，请联系创建者升级 VIP')
+      return
+    }
+    message.error(getApiErrorMessage(error, '操作失败'))
   } finally {
     actingId.value = null
   }

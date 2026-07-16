@@ -31,6 +31,8 @@ export interface UserVO {
   updateTime: string
   followerCount: number
   followingCount: number
+  vipExpireTime?: string | null
+  vipActive?: boolean
 }
 
 export interface LoginResult {

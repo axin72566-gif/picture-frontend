@@ -6,6 +6,7 @@ import {
   CameraOutline,
   ChatbubbleOutline,
   CloudUploadOutline,
+  DiamondOutline,
   ImagesOutline,
   LogInOutline,
   LogOutOutline,
@@ -13,7 +14,9 @@ import {
   PeopleOutline,
   PersonAddOutline,
   PersonCircleOutline,
+  PricetagOutline,
   ShieldCheckmarkOutline,
+  TicketOutline,
 } from '@vicons/ionicons5'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
@@ -53,17 +56,34 @@ const menuOptions = computed(() => {
       icon: renderIcon(NotificationsOutline),
     },
     {
+      label: 'VIP 会员',
+      key: 'vip',
+      icon: renderIcon(DiamondOutline),
+    },
+    {
+      label: '优惠券',
+      key: 'coupons',
+      icon: renderIcon(TicketOutline),
+    },
+    {
       label: '个人资料',
       key: 'profile',
       icon: renderIcon(PersonCircleOutline),
     },
   ]
   if (auth.user?.userRole === 'admin') {
-    items.push({
-      label: '聊天治理',
-      key: 'admin',
-      icon: renderIcon(ShieldCheckmarkOutline),
-    })
+    items.push(
+      {
+        label: '聊天治理',
+        key: 'admin',
+        icon: renderIcon(ShieldCheckmarkOutline),
+      },
+      {
+        label: '优惠券活动',
+        key: 'admin-coupons',
+        icon: renderIcon(PricetagOutline),
+      },
+    )
   }
   items.push(
     {
@@ -115,6 +135,16 @@ async function handleMenuSelect(key: string | number) {
     return
   }
 
+  if (key === 'vip') {
+    await router.push('/vip')
+    return
+  }
+
+  if (key === 'coupons') {
+    await router.push('/coupons')
+    return
+  }
+
   if (key === 'profile') {
     await router.push('/profile')
     return
@@ -122,6 +152,11 @@ async function handleMenuSelect(key: string | number) {
 
   if (key === 'admin') {
     await router.push('/admin')
+    return
+  }
+
+  if (key === 'admin-coupons') {
+    await router.push('/admin/coupons')
     return
   }
 
@@ -198,6 +233,7 @@ async function handleMenuSelect(key: string | number) {
           <button class="user-trigger" type="button">
             <UserAvatar :key="auth.avatarKey" :size="34" :src="auth.avatarDisplayUrl" :text="avatarText" />
             <span class="user-name">{{ auth.displayName }}</span>
+            <span v-if="auth.user?.vipActive" class="vip-badge">VIP</span>
           </button>
         </n-dropdown>
       </div>
@@ -320,6 +356,17 @@ async function handleMenuSelect(key: string | number) {
   white-space: nowrap;
   font-size: 14px;
   color: #374151;
+}
+
+.vip-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 720px) {
